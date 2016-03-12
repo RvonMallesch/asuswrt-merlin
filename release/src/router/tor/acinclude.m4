@@ -243,7 +243,7 @@ if test "$cross_compiling" != yes; then
    done
 
    if test "$runnable" = no; then
-     AC_MSG_ERROR([Found linkable $1 in $tor_cv_library_$1_dir, but it does not seem to run, even with -R. Maybe specify another using --with-$1-dir}])
+    # AC_MSG_ERROR([Found linkable $1 in $tor_cv_library_$1_dir, but it does not seem to run, even with -R. Maybe specify another using --with-$1-dir}])
    fi
    LDFLAGS="$orig_LDFLAGS"
   ]) dnl end cache check check for extra options.

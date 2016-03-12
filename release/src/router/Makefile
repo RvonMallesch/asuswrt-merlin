@@ -2537,7 +2537,7 @@ tor/Makefile:
 	(cd tor ; $(CONFIGURE) --enable-static-libevent --with-libevent-dir=$(STAGEDIR)/usr \
 					--with-openssl-dir=$(TOP)/openssl \
 					--with-zlib-dir=$(TOP)/zlib \
-					--disable-asciidoc)
+					--disable-asciidoc --disable-linker-hardening) 
 
 tor-install: tor
 	install -D tor/src/or/tor $(INSTALLDIR)/tor/usr/sbin/Tor
@@ -2807,7 +2807,8 @@ libid3tag/stamp-h1: zlib
 	touch $@
 
 libid3tag: libid3tag/stamp-h1 zlib
-	@$(MAKE) -C libid3tag all $(PARALLEL_BUILD)
+	@$(MAKE) -C libid3tag $(PARALLEL_BUILD)
+#	@$(MAKE) -C libid3tag all $(PARALLEL_BUILD)
 
 libid3tag-clean:
 	-@$(MAKE) -C libid3tag clean

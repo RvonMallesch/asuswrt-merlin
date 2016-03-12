@@ -1827,11 +1827,11 @@ _dprintf("start_wan_if: USB modem is scanning...\n");
 
 #ifdef RTCONFIG_DSL
 #ifdef RTCONFIG_DUALWAN
-			if (wan_type == WANS_DUALWAN_IF_DSL)
+			if (wan_type == WANS_DUALWAN_IF_DSL) {
 #endif
-			(
 				if (nvram_match("dsl0_proto", "ipoa"))
 					start_ipoa();
+			}
 #endif
 
 			/* MTU */
