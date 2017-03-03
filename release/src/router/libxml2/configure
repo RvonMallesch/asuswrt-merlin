@@ -4718,7 +4718,7 @@ fi
 
 
 
-##AM_C_PROTOTYPES
+#AM_C_PROTOTYPES
 test "x$U" != "x" && as_fn_error $? "Compiler not ANSI compliant" "$LINENO" 5
 
 enable_win32_dll=yes

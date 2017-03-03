@@ -1,4 +1,4 @@
-/* Copyright (c) 2007-2013, The Tor Project, Inc. */
+/* Copyright (c) 2007-2015, The Tor Project, Inc. */
 /* See LICENSE for licensing information */
 
 #include "orconfig.h"
@@ -13,12 +13,21 @@
 #include <unistd.h>
 #endif
 
+#include "compat.h"
+
+/* Some versions of OpenSSL declare X509_STORE_CTX_set_verify_cb twice in
+ * x509.h and x509_vfy.h. Suppress the GCC warning so we can build with
+ * -Wredundant-decl. */
+DISABLE_GCC_WARNING(redundant-decls)
+
 #include <openssl/evp.h>
 #include <openssl/pem.h>
 #include <openssl/rsa.h>
 #include <openssl/objects.h>
 #include <openssl/obj_mac.h>
 #include <openssl/err.h>
+
+ENABLE_GCC_WARNING(redundant-decls)
 
 #include <errno.h>
 #if 0
@@ -28,31 +37,32 @@
 #endif
 
 #include "compat.h"
-#include "../common/util.h"
-#include "../common/torlog.h"
+#include "util.h"
+#include "torlog.h"
 #include "crypto.h"
 #include "address.h"
+#include "util_format.h"
 
 #define IDENTITY_KEY_BITS 3072
 #define SIGNING_KEY_BITS 2048
 #define DEFAULT_LIFETIME 12
 
 /* These globals are set via command line options. */
-char *identity_key_file = NULL;
-char *signing_key_file = NULL;
-char *certificate_file = NULL;
-int reuse_signing_key = 0;
-int verbose = 0;
-int make_new_id = 0;
-int months_lifetime = DEFAULT_LIFETIME;
-int passphrase_fd = -1;
-char *address = NULL;
+static char *identity_key_file = NULL;
+static char *signing_key_file = NULL;
+static char *certificate_file = NULL;
+static int reuse_signing_key = 0;
+static int verbose = 0;
+static int make_new_id = 0;
+static int months_lifetime = DEFAULT_LIFETIME;
+static int passphrase_fd = -1;
+static char *address = NULL;
 
-char *passphrase = NULL;
-size_t passphrase_len = 0;
+static char *passphrase = NULL;
+static size_t passphrase_len = 0;
 
-EVP_PKEY *identity_key = NULL;
-EVP_PKEY *signing_key = NULL;
+static EVP_PKEY *identity_key = NULL;
+static EVP_PKEY *signing_key = NULL;
 
 /** Write a usage message for tor-gencert to stderr. */
 static void
@@ -95,14 +105,21 @@ load_passphrase(void)
 {
   char *cp;
   char buf[1024]; /* "Ought to be enough for anybody." */
+  memset(buf, 0, sizeof(buf)); /* should be needless */
   ssize_t n = read_all(passphrase_fd, buf, sizeof(buf), 0);
   if (n < 0) {
     log_err(LD_GENERAL, "Couldn't read from passphrase fd: %s",
             strerror(errno));
     return -1;
   }
+  /* We'll take everything from the buffer except for optional terminating
+   * newline. */
   cp = memchr(buf, '\n', n);
-  passphrase_len = cp-buf;
+  if (cp == NULL) {
+    passphrase_len = n;
+  } else {
+    passphrase_len = cp-buf;
+  }
   passphrase = tor_strndup(buf, passphrase_len);
   memwipe(buf, 0, sizeof(buf));
   return 0;
@@ -134,17 +151,29 @@ parse_commandline(int argc, char **argv)
         fprintf(stderr, "No argument to -i\n");
         return 1;
       }
+      if (identity_key_file) {
+        fprintf(stderr, "Duplicate values for -i\n");
+        return -1;
+      }
       identity_key_file = tor_strdup(argv[++i]);
     } else if (!strcmp(argv[i], "-s")) {
       if (i+1>=argc) {
         fprintf(stderr, "No argument to -s\n");
         return 1;
       }
+      if (signing_key_file) {
+        fprintf(stderr, "Duplicate values for -s\n");
+        return -1;
+      }
       signing_key_file = tor_strdup(argv[++i]);
     } else if (!strcmp(argv[i], "-c")) {
       if (i+1>=argc) {
         fprintf(stderr, "No argument to -c\n");
         return 1;
+      }
+      if (certificate_file) {
+        fprintf(stderr, "Duplicate values for -c\n");
+        return -1;
       }
       certificate_file = tor_strdup(argv[++i]);
     } else if (!strcmp(argv[i], "-m")) {
@@ -174,8 +203,7 @@ parse_commandline(int argc, char **argv)
         return 1;
       in.s_addr = htonl(addr);
       tor_inet_ntoa(&in, b, sizeof(b));
-      address = tor_malloc(INET_NTOA_BUF_LEN+32);
-      tor_snprintf(address, INET_NTOA_BUF_LEN+32, "%s:%d", b, (int)port);
+      tor_asprintf(&address, "%s:%d", b, (int)port);
     } else if (!strcmp(argv[i], "--create-identity-key")) {
       make_new_id = 1;
     } else if (!strcmp(argv[i], "--passphrase-fd")) {
@@ -383,17 +411,18 @@ key_to_string(EVP_PKEY *key)
   b = BIO_new(BIO_s_mem());
   if (!PEM_write_bio_RSAPublicKey(b, rsa)) {
     crypto_log_errors(LOG_WARN, "writing public key to string");
+    RSA_free(rsa);
     return NULL;
   }
 
   BIO_get_mem_ptr(b, &buf);
-  (void) BIO_set_close(b, BIO_NOCLOSE);
-  BIO_free(b);
   result = tor_malloc(buf->length + 1);
   memcpy(result, buf->data, buf->length);
   result[buf->length] = 0;
-  BUF_MEM_free(buf);
 
+  BIO_free(b);
+
+  RSA_free(rsa);
   return result;
 }
 
@@ -469,12 +498,16 @@ generate_certificate(void)
   tor_free(signing);
 
   /* Append a cross-certification */
+  RSA *rsa = EVP_PKEY_get1_RSA(signing_key);
   r = RSA_private_encrypt(DIGEST_LEN, (unsigned char*)id_digest,
                           (unsigned char*)signature,
-                          EVP_PKEY_get1_RSA(signing_key),
+                          rsa,
                           RSA_PKCS1_PADDING);
+  RSA_free(rsa);
+
   signed_len = strlen(buf);
-  base64_encode(buf+signed_len, sizeof(buf)-signed_len, signature, r);
+  base64_encode(buf+signed_len, sizeof(buf)-signed_len, signature, r,
+                BASE64_ENCODE_MULTILINE);
 
   strlcat(buf,
           "-----END ID SIGNATURE-----\n"
@@ -483,13 +516,16 @@ generate_certificate(void)
   signed_len = strlen(buf);
   SHA1((const unsigned char*)buf,signed_len,(unsigned char*)digest);
 
+  rsa = EVP_PKEY_get1_RSA(identity_key);
   r = RSA_private_encrypt(DIGEST_LEN, (unsigned char*)digest,
                           (unsigned char*)signature,
-                          EVP_PKEY_get1_RSA(identity_key),
+                          rsa,
                           RSA_PKCS1_PADDING);
+  RSA_free(rsa);
   strlcat(buf, "-----BEGIN SIGNATURE-----\n", sizeof(buf));
   signed_len = strlen(buf);
-  base64_encode(buf+signed_len, sizeof(buf)-signed_len, signature, r);
+  base64_encode(buf+signed_len, sizeof(buf)-signed_len, signature, r,
+                BASE64_ENCODE_MULTILINE);
   strlcat(buf, "-----END SIGNATURE-----\n", sizeof(buf));
 
   if (!(f = fopen(certificate_file, "w"))) {
@@ -513,14 +549,14 @@ int
 main(int argc, char **argv)
 {
   int r = 1;
-  init_logging();
+  init_logging(1);
 
   /* Don't bother using acceleration. */
   if (crypto_global_init(0, NULL, NULL)) {
     fprintf(stderr, "Couldn't initialize crypto library.\n");
     return 1;
   }
-  if (crypto_seed_rng(1)) {
+  if (crypto_seed_rng()) {
     fprintf(stderr, "Couldn't seed RNG.\n");
     goto done;
   }
@@ -552,6 +588,7 @@ main(int argc, char **argv)
   tor_free(identity_key_file);
   tor_free(signing_key_file);
   tor_free(certificate_file);
+  tor_free(address);
 
   crypto_global_cleanup();
   return r;

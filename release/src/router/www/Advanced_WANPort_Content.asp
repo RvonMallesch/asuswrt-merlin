@@ -107,7 +107,7 @@ country_n_isp[1] = new Array("edu","telecom","mobile","unicom");
 
 function initial(){
 	show_menu();
-	wans_flag = (wans_dualwan_orig.search("none") == -1) ? 1:0;
+	wans_flag = (wans_dualwan_orig.search("none") != -1 || !parent.dualWAN_support) ? 0 : 1;
 	wans_caps_primary = wans_caps;
 	wans_caps_secondary = wans_caps;
 	
@@ -122,6 +122,17 @@ function initial(){
 	if(based_modelid == "RT-AC87U"){ //MODELDEP: RT-AC87 : Quantenna port
                 document.form.wans_lanport1.remove(0);   //Primary LAN1
                 document.form.wans_lanport2.remove(0);   //Secondary LAN1
+	}
+
+	if(based_modelid == "RT-AC5300R"){ //MODELDEP: RT-AC5300R : TRUNK PORT
+		document.form.wans_lanport1.options[0].text = "LAN Port 8";	//P4
+		document.form.wans_lanport1.options[1].text = "LAN Port 4";	//P3
+		document.form.wans_lanport2.options[0].text = "LAN Port 8";	//P4
+		document.form.wans_lanport2.options[1].text = "LAN Port 4";	//P3
+		document.form.wans_lanport1.remove(3);   //Primary LAN4
+		document.form.wans_lanport1.remove(2);   //Primary LAN3
+		document.form.wans_lanport2.remove(3);   //Secondary LAN4
+		document.form.wans_lanport2.remove(2);   //Secondary LAN3
 	}
 
 	update_detection_time();
@@ -142,6 +153,7 @@ function form_show(v){
 		document.form.wans_routing_enable[1].checked = true;		
 		document.form.wans_routing_enable[0].disabled = true;
 		document.form.wans_routing_enable[1].disabled = true;
+		document.getElementById('watchdog_table').style.display = "none";
 		document.getElementById('Routing_rules_table').style.display = "none";
 		document.getElementById('wans_RoutingRules_Block').style.display = "none";	
 		document.form.wans_primary.value = wans_dualwan_orig.split(" ")[0];	
@@ -156,7 +168,8 @@ function form_show(v){
 		document.getElementById("fo_detection_count_hd").innerHTML = "<#dualwan_pingtime_detect3#>";
 		document.getElementById("sentence1").style.display = "none";
 		document.getElementById("sentence2").style.display = "none";		
-	}else{ //DualWAN enabled
+	}
+	else{ //DualWAN enabled
 		document.form.wans_primary.value = wans_dualwan_orig.split(" ")[0];
 		if(wans_dualwan_orig.split(" ")[1] == "none"){
 
@@ -384,9 +397,17 @@ function changeWANProto(obj){
 					else
 						document.form.wans_second.value = "lan";
 				}
+				else if(obj.value == "usb"){
+					if(wans_caps.search("wan") >= 0)
+						document.form.wans_second.value = "wan";
+					else if(wans_caps.search("lan") >= 0)
+						document.form.wans_second.value = "lan";
+				}
 				else{
 					if(wans_caps.search("wan") >= 0)
 						document.form.wans_second.value = "wan";					
+					else if(wans_caps.search("usb") >= 0)
+						document.form.wans_second.value = "usb";
 				}
 			}
 			else if(obj.name == "wans_second"){
@@ -474,9 +495,11 @@ function appendModeOption(v){
 			appendcountry(document.form.wan0_isp_country);
 			appendcountry(document.form.wan1_isp_country);				
 			inputCtrl(document.form.wans_routing_enable[0], 1);
-			inputCtrl(document.form.wans_routing_enable[1], 1);				
+			inputCtrl(document.form.wans_routing_enable[1], 1);
+			
+			document.getElementById('watchdog_table').style.display = "none";
 			if('<% nvram_get("wans_routing_enable"); %>' == 1){
-				document.form.wans_routing_enable[0].checked = true;
+				document.form.wans_routing_enable[0].checked = true;				
 				document.getElementById('Routing_rules_table').style.display = "";
 				document.getElementById('wans_RoutingRules_Block').style.display = "";
 			}
@@ -511,6 +534,7 @@ function appendModeOption(v){
 			document.form.wans_routing_enable[1].checked = true;				
 			document.form.wans_routing_enable[0].disabled = true;
 			document.form.wans_routing_enable[1].disabled = true;
+			document.getElementById('watchdog_table').style.display = "";
 			document.getElementById('Routing_rules_table').style.display = "none";
 			document.getElementById('wans_RoutingRules_Block').style.display = "none";
 			
@@ -921,7 +945,7 @@ function remain_origins(){
 <input type="hidden" name="next_page" value="Advanced_WANPort_Content.asp">
 <input type="hidden" name="modified" value="0">
 <input type="hidden" name="action_mode" value="apply">
-<input type="hidden" name="action_wait" value="5">
+<input type="hidden" name="action_wait" value="<% get_default_reboot_time(); %>">
 <input type="hidden" name="action_script" value="reboot">
 <input type="hidden" name="preferred_lang" id="preferred_lang" value="<% nvram_get("preferred_lang"); %>">
 <input type="hidden" name="firmver" value="<% nvram_get("firmver"); %>">
@@ -942,15 +966,15 @@ function remain_origins(){
 <div id="detect_time_confirm" style="display:none;">
 		<!--div style="margin:20px 30px 20px;"-->
 		<table width="90%" border="0" align="left" cellpadding="4" cellspacing="0" style="margin:15px 20px 15px; text-align:left;">
-			<tr><td colspan="2"><#Standby_hint1#></td></tr><tr><td colspan="2"><#Standby_hint2#>&nbsp;<span id="str_detect_time"></span>&nbsp;<#Second#>.</td></tr>
+			<tr><td colspan="2"><#Standby_hint1#></td></tr><tr><td colspan="2"><#Standby_hint2#>&nbsp;:&nbsp;<span id="str_detect_time"></span>&nbsp;<#Second#>.</td></tr>
 			<tr>
-				<th style="width:30%;"><#Retry_interval#>:</th>
+				<th style="width:30%;"><#Retry_interval#></th>
 				<td>
 					<input type="text" name="detect_interval" class="input_3_table" maxlength="1" value=""; placeholder="5" autocorrect="off" autocapitalize="off" onKeyPress="return validator.isNumber(this, event);" onblur="update_str_time();" style="width: 38px; margin: 0px;">&nbsp;&nbsp;<#Second#>
 				</td>
 			</tr>
 			<tr>
-				<th><#Retry_count#>:</th>
+				<th><#Retry_count#></th>
 				<td>
 					<select name="detect_count" class="input_option" onchange="update_str_time();" style="margin: 0px 0px;"></select>
 					<span id="detect_tail_msg">&nbsp;( Detection Time: <span id="detection_time_value"></span>&nbsp;&nbsp;<#Second#>)</span>

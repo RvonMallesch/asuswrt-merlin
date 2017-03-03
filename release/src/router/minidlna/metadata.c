@@ -149,7 +149,7 @@ check_for_captions(const char *path, int64_t detailID)
 
 	if (ret == 0)
 	{
-		sql_exec(db, "INSERT into CAPTIONS"
+		sql_exec(db, "INSERT OR REPLACE into CAPTIONS"
 		             " (ID, PATH) "
 		             "VALUES"
 		             " (%lld, %Q)", detailID, file);
@@ -478,7 +478,7 @@ GetAudioMetadata(const char *path, char *name)
 }
 
 /* For libjpeg error handling */
-jmp_buf setjmp_buffer;
+static jmp_buf setjmp_buffer;
 static void
 libjpeg_error_handler(j_common_ptr cinfo)
 {
@@ -1523,6 +1523,10 @@ video_no_dlna:
 			xasprintf(&m.mime, "video/x-matroska");
 		else if( strcmp(ctx->iformat->name, "flv") == 0 )
 			xasprintf(&m.mime, "video/x-flv");
+		else if( strcmp(ctx->iformat->name, "rm") == 0 )
+			xasprintf(&m.mime, "video/x-pn-realvideo");
+		else if( strcmp(ctx->iformat->name, "rmvb") == 0 )
+			xasprintf(&m.mime, "video/x-pn-realvideo");
 		else
 			DPRINTF(E_WARN, L_METADATA, "%s: Unhandled format: %s\n", path, ctx->iformat->name);
 	}

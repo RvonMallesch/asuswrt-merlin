@@ -4,7 +4,7 @@
  * make them to acconfig.h and rerun autoheader */
 
 /* Define if you enable IPv6 support */
-/* #undef INET6 */
+#define INET6 1
 
 /* Define if you enable support for the libsmi. */
 /* #undef LIBSMI */
@@ -25,7 +25,7 @@
 /* #undef USE_GETIPNODEBY */
 
 /* define if you have ether_ntohost() and it works */
-/* #undef USE_ETHER_NTOHOST */
+#define USE_ETHER_NTOHOST 1
 
 /* define if libpcap has pcap_version */
 /* #undef HAVE_PCAP_VERSION */
@@ -83,7 +83,7 @@
 
 /* Define to 1 if you have the declaration of `ether_ntohost', and to 0 if you
    don't. */
-/* #undef HAVE_DECL_ETHER_NTOHOST */
+#define HAVE_DECL_ETHER_NTOHOST 1
 
 /* Define to 1 if you have the `ether_ntohost' function. */
 #define HAVE_ETHER_NTOHOST 1
@@ -95,7 +95,7 @@
 #define HAVE_FORK 1
 
 /* Define to 1 if you have the `getnameinfo' function. */
-/* #undef HAVE_GETNAMEINFO */
+#define HAVE_GETNAMEINFO 1
 
 /* Define to 1 if you have the <inttypes.h> header file. */
 #define HAVE_INTTYPES_H 1
@@ -116,7 +116,7 @@
 /* #undef HAVE_NETDNET_DNETDB_H */
 
 /* Define to 1 if you have the <netinet/ether.h> header file. */
-/* #undef HAVE_NETINET_ETHER_H */
+#define HAVE_NETINET_ETHER_H 1
 
 /* Define to 1 if you have the <netinet/if_ether.h> header file. */
 #define HAVE_NETINET_IF_ETHER_H 1
@@ -245,7 +245,7 @@
 #define LBL_ALIGN 1
 
 /* Define to 1 if netinet/ether.h declares `ether_ntohost' */
-/* #undef NETINET_ETHER_H_DECLARES_ETHER_NTOHOST */
+#define NETINET_ETHER_H_DECLARES_ETHER_NTOHOST /**/
 
 /* Define to 1 if netinet/if_ether.h declares `ether_ntohost' */
 /* #undef NETINET_IF_ETHER_H_DECLARES_ETHER_NTOHOST */

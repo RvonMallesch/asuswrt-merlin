@@ -1,8 +1,14 @@
 #!/bin/sh
 
 PARAM=$*
+if [ "$PARAM" == "" ]
+then
+	# Add paramaters equivalent to those passed for up command
+	PARAM="$dev $tun_mtu $link_mtu $ifconfig_local $ifconfig_remote"
+fi
 
 create_client_list(){
+	OLDIFS=$IFS
 	IFS="<"
 
 	for ENTRY in $VPN_IP_LIST
@@ -119,7 +125,7 @@ else
 fi
 
 VPN_TBL="ovpnc"$VPN_UNIT
-START_PRIO=$((1000+(200*($VPN_UNIT-1))))
+START_PRIO=$((10000+(200*($VPN_UNIT-1))))
 END_PRIO=$(($START_PRIO+199))
 WAN_PRIO=$START_PRIO
 VPN_PRIO=$(($START_PRIO+100))
@@ -184,6 +190,11 @@ then
 	do
 		ip route del $NET dev $dev
 		logger -t "openvpn-routing" "Removing route for $NET to $dev from main routing table"
+	done
+
+# Unsure if necessary, but most policy-based routing scripts disable reverse path filtering
+	for i in /proc/sys/net/ipv4/conf/*/rp_filter ; do
+		echo 0 > $i
 	done
 
 # Update policy rules

@@ -57,22 +57,6 @@
 
 void update_lan_status(int);
 
-in_addr_t inet_addr_(const char *cp)
-{
-	struct in_addr a;
-
-	if (!inet_aton(cp, &a))
-		return INADDR_ANY;
-	else
-		return a.s_addr;
-}
-
-inline int inet_equal(char *addr1, char *mask1, char *addr2, char *mask2)
-{
-	return ((inet_network(addr1) & inet_network(mask1)) ==
-		(inet_network(addr2) & inet_network(mask2)));
-}
-
 /* remove space in the end of string */
 char *trim_r(char *str)
 {
@@ -272,28 +256,32 @@ void wanmessage(char *fmt, ...)
 	va_end(args);
 }
 
-int pppstatus(void)
+int _pppstatus(const char *statusfile)
 {
-	FILE *fp;
-	char sline[128], buf[128], *p;
+	char status[128];
 
-	if ((fp = fopen("/tmp/wanstatus.log", "r")) && fgets(sline, sizeof(sline), fp))
-	{
-		fcntl(fileno(fp), F_SETFL, fcntl(fileno(fp), F_GETFL) | O_NONBLOCK);
-		p = strstr(sline, ",");
-		strcpy(buf, p+1);
-	}
-	else
-	{
-		strcpy(buf, "unknown reason");
-	}
+	if (!statusfile || f_read_string(statusfile, status, sizeof(status)) <= 0)
+		return WAN_STOPPED_REASON_NONE;
 
-	if(fp) fclose(fp);
+	if (strstr(status, "No response from ISP") != NULL)
+		return WAN_STOPPED_REASON_PPP_NO_RESPONSE;
+	else if (strstr(status, "Peer not responding") != NULL)
+		return WAN_STOPPED_REASON_NONE; /* Connection appears to be disconnected */
+	else if (strstr(status, "Failed to authenticate ourselves to peer") != NULL ||
+		 strstr(status, "Authentication failed") != NULL)
+		return WAN_STOPPED_REASON_PPP_AUTH_FAIL;
+	else if (strstr(status, "Link inactive") != NULL)
+		return WAN_STOPPED_REASON_PPP_LACK_ACTIVITY;
 
-	if(strstr(buf, "No response from ISP.")) return WAN_STOPPED_REASON_PPP_NO_ACTIVITY;
-	else if(strstr(buf, "Failed to authenticate ourselves to peer")) return WAN_STOPPED_REASON_PPP_AUTH_FAIL;
-	else if(strstr(buf, "Terminating connection due to lack of activity")) return WAN_STOPPED_REASON_PPP_LACK_ACTIVITY;
-	else return WAN_STOPPED_REASON_NONE;
+	return WAN_STOPPED_REASON_NONE;
+}
+
+int pppstatus(int unit)
+{
+	char statusfile[sizeof("/var/run/ppp-wanXXXXXXXXXX.status")];
+
+	snprintf(statusfile, sizeof(statusfile), "/var/run/ppp-wan%d.status", unit);
+	return _pppstatus(statusfile);
 }
 
 void usage_exit(const char *cmd, const char *help)
@@ -845,14 +833,14 @@ void setup_conntrack(void)
 
 void setup_pt_conntrack(void)
 {
-	if (!nvram_match("fw_pt_rtsp", "0")) {
+	if (nvram_match("fw_pt_rtsp", "1")) {
 		ct_modprobe("rtsp", "ports=554,8554");
 	}
 	else {
 		ct_modprobe_r("rtsp");
 	}
 
-	if (!nvram_match("fw_pt_h323", "0")) {
+	if (nvram_match("fw_pt_h323", "1")) {
 		ct_modprobe("h323");
 	}
 	else {
@@ -860,7 +848,7 @@ void setup_pt_conntrack(void)
 	}
 
 #ifdef LINUX26
-	if (!nvram_match("fw_pt_sip", "0")) {
+	if (nvram_match("fw_pt_sip", "1")) {
 		ct_modprobe("sip");
 	}
 	else {
@@ -933,7 +921,7 @@ void set_mac(const char *ifname, const char *nvname, int plus)
 	else
 		et_hwaddr = nvram_safe_get("et0macaddr");
 #else
-	et_hwaddr = nvram_safe_get("et0macaddr");
+	et_hwaddr = get_lan_hwaddr();
 #endif
 
 	if (!ether_atoe(nvram_safe_get(nvname), (unsigned char *)&ifr.ifr_hwaddr.sa_data)) {
@@ -948,7 +936,8 @@ void set_mac(const char *ifname, const char *nvname, int plus)
 			else
 				nvram_set("et0macaddr", "00:01:23:45:67:89");
 #else
-			nvram_set("et0macaddr", "00:01:23:45:67:89");
+			nvram_set("lan_hwaddr", "00:01:23:45:67:89");
+			nvram_set(get_lan_mac_name(), "00:01:23:45:67:89");
 #endif
 			ifr.ifr_hwaddr.sa_data[0] = 0;
 			ifr.ifr_hwaddr.sa_data[1] = 0x01;
@@ -1052,6 +1041,25 @@ void killall_tk(const char *name)
 	}
 }
 
+void killall_tk_period_wait(const char *name, int wait)
+{
+	int n;
+
+	if (killall(name, SIGTERM) == 0) {
+		n = wait;
+		while ((killall(name, 0) == 0) && (n-- > 0)) {
+			_dprintf("%s: waiting name=%s n=%d\n", __FUNCTION__, name, n);
+			sleep(1);
+		}
+		if (n < 0) {
+			n = wait;
+			while ((killall(name, SIGKILL) == 0) && (n-- > 0)) {
+				_dprintf("%s: SIGKILL name=%s n=%d\n", __FUNCTION__, name, n);
+				sleep(1);
+			}
+		}
+	}
+}
 void kill_pidfile_tk(const char *pidfile)
 {
 	FILE *fp;
@@ -1298,6 +1306,31 @@ is_valid_hostname(const char *name)
 	return len;
 }
 
+int
+is_valid_domainname(const char *name)
+{
+	int len, i;
+	unsigned char c;
+
+	if (!name)
+		return 0;
+
+	len = strlen(name);
+	for (i = 0; i < len; i++) {
+		c = name[i];
+		if (((c | 0x20) < 'a' || (c | 0x20) > 'z') &&
+		    ((c < '0' || c > '9')) &&
+		    (c != '.' && c != '-' && c != '_')) {
+			len = 0;
+			break;
+		}
+	}
+#if 0
+	printf("%s is %svalid for domainname\n", name, len ? "" : "in");
+#endif
+	return len;
+}
+
 int get_meminfo_item(const char *name)
 {
 	FILE *fp;
@@ -1351,17 +1384,22 @@ int setup_dnsmq(int mode)
 	else {
 		eval("ebtables", "-F");
 		eval("ebtables", "-t", "broute", "-F");
-		eval("ebtables", "-I", "FORWARD", "-i", "eth1", "-j", "DROP");
+		eval("ebtables", "-I", "FORWARD", "-i", nvram_safe_get(wlc_nvname("ifname")), "-j", "DROP");
 	}	
 	
 	eval("iptables", "-t", "nat", "-F", "PREROUTING");
-	eval("iptables", "-t", "nat", "-I", "PREROUTING", "-p", "udp", "--dport", "53", "-j", "DNAT", "--to-destination", strcat_r(nvram_safe_get("lan_ipaddr"), ":18018", tmp));
+	eval("iptables", "-t", "nat", "-I", "PREROUTING", "-p", "udp", "--dport", "53",
+		"-j", "DNAT", "--to-destination", strcat_r(nvram_safe_get("lan_ipaddr"), ":18018", tmp));
 
 	if(mode) {
 #if defined(RTCONFIG_BCMWL6) && defined(RTCONFIG_PROXYSTA)
 		if (!is_psta(nvram_get_int("wlc_band")) && !is_psr(nvram_get_int("wlc_band")))
 #endif
-		eval("iptables", "-t", "nat", "-I", "PREROUTING", "-p", "tcp", "-d", "10.0.0.1", "--dport", "80", "-j", "DNAT", "--to-destination", strcat_r(nvram_safe_get("lan_ipaddr"), ":80", tmp));
+		{
+			snprintf(tmp, sizeof(tmp), "%s:%d", nvram_safe_get("lan_ipaddr"), /*nvram_get_int("http_lanport") ? :*/ 80);
+			eval("iptables", "-t", "nat", "-I", "PREROUTING", "-p", "tcp", "-d", "10.0.0.1", "--dport", "80",
+				"-j", "DNAT", "--to-destination", tmp);
+		}
 	
 		//sprintf(v, "%x my.%s", inet_addr("10.0.0.1"), get_productid());
 		sprintf(v, "%x %s", inet_addr(nvram_safe_get("lan_ipaddr")), DUT_DOMAIN_NAME);
@@ -1372,7 +1410,8 @@ int setup_dnsmq(int mode)
 #if defined(RTCONFIG_BCMWL6) && defined(RTCONFIG_PROXYSTA)
 		if (!is_psta(nvram_get_int("wlc_band")) && !is_psr(nvram_get_int("wlc_band")))
 #endif
-		eval("iptables", "-t", "nat", "-I", "PREROUTING", "-p", "tcp", "-d", "10.0.0.1", "--dport", "80", "-j", "DNAT", "--to-destination", strcat_r(nvram_safe_get("lan_ipaddr"), ":18017", tmp));
+		eval("iptables", "-t", "nat", "-I", "PREROUTING", "-p", "tcp", "-d", "10.0.0.1", "--dport", "80",
+			"-j", "DNAT", "--to-destination", strcat_r(nvram_safe_get("lan_ipaddr"), ":18017", tmp));
 	
 		f_write_string("/proc/net/dnsmqctrl", "", 0, 0);
 	}

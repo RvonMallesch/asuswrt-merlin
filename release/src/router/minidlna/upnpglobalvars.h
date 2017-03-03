@@ -57,7 +57,7 @@
 
 #include <sqlite3.h>
 
-#define MINIDLNA_VERSION "1.1.5"
+#define MINIDLNA_VERSION "1.1.6"
 
 #ifdef NETGEAR
 # define SERVER_NAME "ReadyDLNA"
@@ -74,10 +74,6 @@
 #define _(string) (string)
 #endif
 #define THISORNUL(s) (s ? s : "")
-
-#ifndef PNPX
-#define PNPX 0
-#endif
 
 #define RESOURCE_PROTOCOL_INFO_VALUES \
 	"http-get:*:image/jpeg:DLNA.ORG_PN=JPEG_TN," \
@@ -191,6 +187,7 @@ extern uint32_t runtime_flags;
 #define NO_PLAYLIST_MASK      0x0008
 #define SYSTEMD_MASK          0x0010
 #define MERGE_MEDIA_DIRS_MASK 0x0020
+#define WIDE_LINKS_MASK       0x0040
 
 #define SETFLAG(mask)	runtime_flags |= mask
 #define GETFLAG(mask)	(runtime_flags & mask)
@@ -212,10 +209,6 @@ extern char serialnumber[];
 #define PRESENTATIONURL_MAX_LEN 64
 extern char presentationurl[];
 
-#if PNPX
-extern char pnpx_hwid[];
-#endif
-
 /* lan addresses */
 extern int n_lan_addr;
 extern struct lan_addr_s lan_addr[];
@@ -228,7 +221,6 @@ extern sqlite3 *db;
 #define FRIENDLYNAME_MAX_LEN 64
 extern char friendly_name[];
 extern char db_path[];
-extern char db_path_spec[];
 extern char log_path[];
 extern struct media_dir_s *media_dirs;
 extern struct album_art_name_s *album_art_names;
@@ -236,5 +228,7 @@ extern short int scanning;
 extern volatile short int quitting;
 extern volatile uint32_t updateID;
 extern const char *force_sort_criteria;
+extern short int rescan_db;
+extern int web_status;
 
 #endif

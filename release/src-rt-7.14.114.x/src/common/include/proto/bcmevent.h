@@ -1,7 +1,7 @@
 /*
  * Broadcom Event  protocol definitions
  *
- * Copyright (C) 2015, Broadcom Corporation. All Rights Reserved.
+ * Copyright (C) 2016, Broadcom. All Rights Reserved.
  * 
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -17,7 +17,7 @@
  *
  * Dependencies: proto/bcmeth.h
  *
- * $Id: bcmevent.h 566959 2015-06-26 08:57:35Z $
+ * $Id: bcmevent.h 623712 2016-03-09 01:25:41Z $
  *
  */
 
@@ -231,10 +231,12 @@ typedef BWL_PRE_PACKED_STRUCT struct bcm_event {
 #define WLC_E_AUTHORIZED	136	/* a STA been authroized for traffic */
 #define WLC_E_PROBREQ_MSG_RX	137 /* probe req with wl_event_rx_frame_data_t header */
 #define WLC_E_PEER_TIMEOUT	138 /* silently drop a STA because of inactivity */
-#define WLC_E_PRE_ASSOC_RSEP_IND	139
-#define WLC_E_LAST			140	/* highest val + 1 for range checking */
-#if (WLC_E_LAST > 140)
-#error "WLC_E_LAST: Invalid value for last event; must be <= 140."
+#define WLC_E_RRM			141	/* RRM event */
+#define WLC_E_PRE_ASSOC_RSEP_IND        149	/* assoc resp received */
+#define WLC_E_BSSTRANS_RESP		156 /* BSS Transition Response received */
+#define WLC_E_LAST			157	/* highest val + 1 for range checking */
+#if (WLC_E_LAST > 157)
+#error "WLC_E_LAST: Invalid value for last event; must be <= 157."
 #endif /* WLC_E_LAST */
 
 /* define an API for getting the string name of an event */

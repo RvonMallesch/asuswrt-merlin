@@ -213,7 +213,7 @@ function startDetect(){
 	if(parent.powerline_support)
 		update_plc_info();
 	else{
-		if((autodet_state == "2" && autodet_auxstate == "6") || (wanstate  == 2 && wansbstate == 0 && wanauxstate == 0)){
+		if((autodet_state == "6" || autodet_auxstate == "6") || (wanstate  == 2 && wansbstate == 0 && wanauxstate == 0)){
 			submitForm(1);
 		}
 		else{
@@ -430,7 +430,7 @@ function uploadSetting(){
 	</div>
 	<div class="table_td">
 		<div style="font-size:3em;color:#FFF;line-height:50px;margin:15px 23px 0 23px;text-align:center;">Welcome</div><!--mobile css-->
-		<div style="font-size:1.4em;color:#279FD9;text-align:center;margin: 0 23px;">ASUS Netowrking Family</div><!--mobile css-->
+		<div style="font-size:1.4em;color:#279FD9;text-align:center;margin: 0 23px;">ASUS Networking Family</div><!--mobile css-->
 		<div id="model_description">
 			<ul>							
 				<li style="line-height:40px;font-size:20px;" id="Productdesc_1"></li>

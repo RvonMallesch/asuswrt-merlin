@@ -1,5 +1,5 @@
 #!/usr/bin/python
-# Copyright 2012-2013, The Tor Project, Inc
+# Copyright 2012-2015, The Tor Project, Inc
 # See LICENSE for licensing information
 
 """
@@ -283,7 +283,7 @@ def client_part2(seckey_x, msg, node_id, pubkey_B, keyBytes=72):
     my_auth = H_mac(auth_input)
 
     badness = my_auth != their_auth
-    badness = bad_result(yx) + bad_result(bx)
+    badness |= bad_result(yx) + bad_result(bx)
 
     if badness:
         return None
@@ -322,7 +322,7 @@ def kdf_vectors():
     """
     import binascii
     def kdf_vec(inp):
-        k = kdf(inp, T_KEY, M_EXPAND, 100)
+        k = kdf_rfc5869(inp, T_KEY, M_EXPAND, 100)
         print(repr(inp), "\n\""+ binascii.b2a_hex(k)+ "\"")
     kdf_vec("")
     kdf_vec("Tor")

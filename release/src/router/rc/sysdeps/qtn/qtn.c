@@ -2,11 +2,15 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 
 #include <bcmnvram.h>
 #include <shutils.h>
 
-#include "shared.h"
+#include <rc.h>
+#include <shared.h>
 #include "web-qtn.h"
 #include "net80211/ieee80211_dfs_reentry.h"
 
@@ -16,13 +20,6 @@
 #endif
 
 static int lock_qtn_apscan = -1;
-
-extern int isValidCountryCode(const char *Ccode);
-extern int isValidRegrev(char *regrev);
-extern int isValidMacAddr(const char* mac);
-extern int file_lock(char *tag);
-extern void file_unlock(int lockfd);
-extern void char_to_ascii(const char *output, const char *input);
 
 #define	WIFINAME	"wifi0"
 #if 0
@@ -97,7 +94,7 @@ int setRegrev_5G_qtn(const char *regrev)
 	int ret;
 	char value[20] = {0};
 
-	if( regrev==NULL || !isValidRegrev((char *)regrev) )
+	if( regrev==NULL || !isValidRegrev(regrev) )
 		return 0;
 
 	if (!rpc_qtn_ready()) {
@@ -696,13 +693,6 @@ int start_nodfs_scan_qtn(void)
 		logmessage("nodfs_scan", "complete");
 	}else{
 		logmessage("nodfs_scan", "scan not complete");
-	}
-
-	qcsapi_retval = qcsapi_wifi_scs_enable(WIFINAME, 1);
-	if (qcsapi_retval >= 0) {
-		logmessage("scs", "enable scs complete");
-	}else{
-		logmessage("scs", "enable scs not complete");
 	}
 
 	return 1;

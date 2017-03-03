@@ -1,4 +1,4 @@
-/* Copyright (c) 2013, The Tor Project, Inc. */
+/* Copyright (c) 2013-2016, The Tor Project, Inc. */
 /* See LICENSE for licensing information */
 
 #include "orconfig.h"
@@ -19,11 +19,11 @@ test_get_sigsafe_err_fds(void *arg)
   int n;
   log_severity_list_t include_bug, no_bug, no_bug2;
   (void) arg;
-  init_logging();
+  init_logging(1);
 
   n = tor_log_get_sigsafe_err_fds(&fds);
-  tt_int_op(n, ==, 1);
-  tt_int_op(fds[0], ==, STDERR_FILENO);
+  tt_int_op(n, OP_EQ, 1);
+  tt_int_op(fds[0], OP_EQ, STDERR_FILENO);
 
   set_log_severity_config(LOG_WARN, LOG_ERR, &include_bug);
   set_log_severity_config(LOG_WARN, LOG_ERR, &no_bug);
@@ -40,26 +40,26 @@ test_get_sigsafe_err_fds(void *arg)
   tor_log_update_sigsafe_err_fds();
 
   n = tor_log_get_sigsafe_err_fds(&fds);
-  tt_int_op(n, ==, 2);
-  tt_int_op(fds[0], ==, STDERR_FILENO);
-  tt_int_op(fds[1], ==, 3);
+  tt_int_op(n, OP_EQ, 2);
+  tt_int_op(fds[0], OP_EQ, STDERR_FILENO);
+  tt_int_op(fds[1], OP_EQ, 3);
 
   /* Allow STDOUT to replace STDERR. */
   add_stream_log(&include_bug, "dummy-4", STDOUT_FILENO);
   tor_log_update_sigsafe_err_fds();
   n = tor_log_get_sigsafe_err_fds(&fds);
-  tt_int_op(n, ==, 2);
-  tt_int_op(fds[0], ==, 3);
-  tt_int_op(fds[1], ==, STDOUT_FILENO);
+  tt_int_op(n, OP_EQ, 2);
+  tt_int_op(fds[0], OP_EQ, 3);
+  tt_int_op(fds[1], OP_EQ, STDOUT_FILENO);
 
   /* But don't allow it to replace explicit STDERR. */
   add_stream_log(&include_bug, "dummy-5", STDERR_FILENO);
   tor_log_update_sigsafe_err_fds();
   n = tor_log_get_sigsafe_err_fds(&fds);
-  tt_int_op(n, ==, 3);
-  tt_int_op(fds[0], ==, STDERR_FILENO);
-  tt_int_op(fds[1], ==, STDOUT_FILENO);
-  tt_int_op(fds[2], ==, 3);
+  tt_int_op(n, OP_EQ, 3);
+  tt_int_op(fds[0], OP_EQ, STDERR_FILENO);
+  tt_int_op(fds[1], OP_EQ, STDOUT_FILENO);
+  tt_int_op(fds[2], OP_EQ, 3);
 
   /* Don't overflow the array. */
   {
@@ -70,7 +70,7 @@ test_get_sigsafe_err_fds(void *arg)
   }
   tor_log_update_sigsafe_err_fds();
   n = tor_log_get_sigsafe_err_fds(&fds);
-  tt_int_op(n, ==, 8);
+  tt_int_op(n, OP_EQ, 8);
 
  done:
   ;
@@ -87,9 +87,9 @@ test_sigsafe_err(void *arg)
 
   set_log_severity_config(LOG_WARN, LOG_ERR, &include_bug);
 
-  init_logging();
+  init_logging(1);
   mark_logs_temp();
-  add_file_log(&include_bug, fn);
+  add_file_log(&include_bug, fn, 0);
   tor_log_update_sigsafe_err_fds();
   close_temp_logs();
 
@@ -109,7 +109,7 @@ test_sigsafe_err(void *arg)
 
   tt_assert(content != NULL);
   tor_split_lines(lines, content, (int)strlen(content));
-  tt_int_op(smartlist_len(lines), >=, 5);
+  tt_int_op(smartlist_len(lines), OP_GE, 5);
 
   if (strstr(smartlist_get(lines, 0), "opening new log file"))
     smartlist_del_keeporder(lines, 0);
@@ -119,7 +119,7 @@ test_sigsafe_err(void *arg)
   tt_assert(!strcmpstart(smartlist_get(lines, 2), "Minimal."));
   /* Next line is blank. */
   tt_assert(!strcmpstart(smartlist_get(lines, 3), "=============="));
-  tt_str_op(smartlist_get(lines, 4), ==,
+  tt_str_op(smartlist_get(lines, 4), OP_EQ,
             "Testing any attempt to manually log from a signal.");
 
  done:
@@ -127,9 +127,47 @@ test_sigsafe_err(void *arg)
   smartlist_free(lines);
 }
 
+static void
+test_ratelim(void *arg)
+{
+  (void) arg;
+  ratelim_t ten_min = RATELIM_INIT(10*60);
+
+  const time_t start = 1466091600;
+  time_t now = start;
+  /* Initially, we're ready. */
+
+  char *msg = NULL;
+
+  msg = rate_limit_log(&ten_min, now);
+  tt_assert(msg != NULL);
+  tt_str_op(msg, OP_EQ, ""); /* nothing was suppressed. */
+
+  tt_int_op(ten_min.last_allowed, OP_EQ, now);
+  tor_free(msg);
+
+  int i;
+  for (i = 0; i < 9; ++i) {
+    now += 60; /* one minute has passed. */
+    msg = rate_limit_log(&ten_min, now);
+    tt_assert(msg == NULL);
+    tt_int_op(ten_min.last_allowed, OP_EQ, start);
+    tt_int_op(ten_min.n_calls_since_last_time, OP_EQ, i + 1);
+  }
+
+  now += 240; /* Okay, we can be done. */
+  msg = rate_limit_log(&ten_min, now);
+  tt_assert(msg != NULL);
+  tt_str_op(msg, OP_EQ,
+            " [9 similar message(s) suppressed in last 600 seconds]");
+ done:
+  tor_free(msg);
+}
+
 struct testcase_t logging_tests[] = {
   { "sigsafe_err_fds", test_get_sigsafe_err_fds, TT_FORK, NULL, NULL },
   { "sigsafe_err", test_sigsafe_err, TT_FORK, NULL, NULL },
+  { "ratelim", test_ratelim, 0, NULL, NULL },
   END_OF_TESTCASES
 };
 

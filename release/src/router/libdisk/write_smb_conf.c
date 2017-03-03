@@ -23,7 +23,7 @@
 #include <ctype.h>
 #include <bcmnvram.h>
 #include <shutils.h>
-#include <rtconfig.h>
+#include <shared.h>
 
 #include "usb_info.h"
 #include "disk_initial.h"
@@ -280,6 +280,12 @@ int main(int argc, char *argv[])
 	fprintf(fp, "passdb backend = smbpasswd\n");
 	fprintf(fp, "smb encrypt = disabled\n");
 	fprintf(fp, "smb passwd file = /etc/samba/smbpasswd\n");
+
+        fprintf(fp, "enable core files = no\n");
+        fprintf(fp, "deadtime = 30\n");
+        fprintf(fp, "load printers = no\n");
+        fprintf(fp, "min receivefile size = 16384\n");
+
 #endif
 #if 0
 #ifdef RTCONFIG_RECVFILE
@@ -305,20 +311,41 @@ int main(int argc, char *argv[])
 #endif
 	}
 	fprintf(fp, "obey pam restrictions = no\n");
-	fprintf(fp, "use spnego = no\n");		// ASUS add
-	fprintf(fp, "client use spnego = no\n");	// ASUS add
+//	fprintf(fp, "use spnego = no\n");		// ASUS add
+//	fprintf(fp, "client use spnego = no\n");	// ASUS add
 //	fprintf(fp, "client use spnego = yes\n");  // ASUS add
 	fprintf(fp, "disable spoolss = yes\n");		// ASUS add
 	fprintf(fp, "host msdfs = no\n");		// ASUS add
 	fprintf(fp, "strict allocate = No\n");		// ASUS add
 //	fprintf(fp, "mangling method = hash2\n");	// ASUS add
 	fprintf(fp, "bind interfaces only = yes\n");    // ASUS add
+	fprintf(fp, "interfaces = lo br0 %s/%s %s\n", nvram_safe_get("lan_ipaddr"), nvram_safe_get("lan_netmask"), (is_routing_enabled() && nvram_get_int("smbd_wanac")) ? nvram_safe_get("wan0_ifname") : "");
+#if 0
+#if defined(RTCONFIG_PPTPD) || defined(RTCONFIG_ACCEL_PPTPD) || defined(RTCONFIG_OPENVPN)
+	int ip[5];
+	char pptpd_subnet[16];
+	char openvpn_subnet[32];
 
-#ifndef RTCONFIG_BCMARM
-	fprintf(fp, "interfaces = lo br0 %s\n", (is_routing_enabled() && nvram_get_int("smbd_wanac")) ? nvram_safe_get("wan0_ifname") : "");
-#else
-	fprintf(fp, "interfaces = br0 %s/%s %s\n", nvram_safe_get("lan_ipaddr"), nvram_safe_get("lan_netmask"), (is_routing_enabled() && nvram_get_int("smbd_wanac")) ? nvram_safe_get("wan0_ifname") : "");
+	memset(pptpd_subnet, 0 , sizeof(pptpd_subnet));
+	memset(openvpn_subnet, 0 , sizeof(openvpn_subnet));
+	if (is_routing_enabled()) {
+#if defined(RTCONFIG_PPTPD) || defined(RTCONFIG_ACCEL_PPTPD)
+		if (nvram_get_int("pptpd_enable")) {
+			sscanf(nvram_safe_get("pptpd_clients"), "%d.%d.%d.%d-%d", &ip[0], &ip[1], &ip[2], &ip[3], &ip[4]);
+			sprintf(pptpd_subnet, "%d.%d.%d.", ip[0], ip[1], ip[2]);
+		}
 #endif
+#ifdef RTCONFIG_OPENVPN
+		if (nvram_get_int("VPNServer_enable") && strstr(nvram_safe_get("vpn_server1_if"), "tun") && nvram_get_int("vpn_server1_plan"))
+			sprintf(openvpn_subnet, "%s/%s", nvram_safe_get("vpn_server1_sn"), nvram_safe_get("vpn_server1_nm"));
+#endif
+	}
+	fprintf(fp, "hosts allow = 127.0.0.1 %s/%s %s %s\n", nvram_safe_get("lan_ipaddr"), nvram_safe_get("lan_netmask"), pptpd_subnet, openvpn_subnet);
+#else
+	fprintf(fp, "hosts allow = 127.0.0.1 %s/%s\n", nvram_safe_get("lan_ipaddr"), nvram_safe_get("lan_netmask"));
+#endif
+	fprintf(fp, "hosts deny = 0.0.0.0/0\n");
+#endif // #if 0
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,36)
 	fprintf(fp, "use sendfile = no\n");
 #else
@@ -350,6 +377,15 @@ int main(int argc, char *argv[])
 	if (nvram_match("enable_samba", "0"))
 		goto confpage;
 
+#if 0
+	fprintf(fp, "[ipc$]\n");
+#if defined(RTCONFIG_PPTPD) || defined(RTCONFIG_ACCEL_PPTPD) || defined(RTCONFIG_OPENVPN)
+	fprintf(fp, "hosts allow = 127.0.0.1 %s/%s %s %s\n", nvram_safe_get("lan_ipaddr"), nvram_safe_get("lan_netmask"), pptpd_subnet, openvpn_subnet);
+#else
+	fprintf(fp, "hosts allow = 127.0.0.1 %s/%s\n", nvram_safe_get("lan_ipaddr"), nvram_safe_get("lan_netmask"));
+#endif
+	fprintf(fp, "hosts deny = 0.0.0.0/0\n");
+#endif // #if 0
 	disks_info = read_disk_data();
 	if (disks_info == NULL) {
 		usb_dbg("Couldn't get disk list when writing smb.conf!\n");
@@ -378,7 +414,7 @@ int main(int argc, char *argv[])
 
 				fprintf(fp, "[%s]\n", mount_folder);
 				fprintf(fp, "comment = %s's %s\n", follow_disk->tag, mount_folder);
-				fprintf(fp, "veto files = /.__*.txt*/asus_lighttpdpasswd/\n");
+				fprintf(fp, "veto files = /.__*.txt*/asusware*/asus_lighttpdpasswd/\n");
 				fprintf(fp, "path = %s\n", follow_partition->mount_point);
 				fprintf(fp, "writeable = yes\n");
 

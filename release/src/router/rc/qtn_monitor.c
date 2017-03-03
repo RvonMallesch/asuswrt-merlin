@@ -49,10 +49,10 @@ void create_mbssid_vlan(void)
 {
 	if(nvram_get_int("wl1.1_bss_enabled") == 1){
 		if(nvram_match("wl1.1_lanaccess", "off") &&
-			!nvram_match("wl1.1_lanaccess", "")){
+			!nvram_match("wl1.1_lanaccess", "")){	// strange logic !? same happened below below
 			/* VID 4000 */
 			eval("vconfig", "add", "eth0", "4000");
-			eval("ifconfig", "vlan4000", "up");
+			eval("ifconfig", "vlan4000", "hw", "ether", nvram_safe_get("lan_hwaddr"), "up");
 			eval("brctl", "addif", "br0", "vlan4000");
 			eval("et", "robowr", "0x05", "0x81", "0x0fa0");
 			eval("et", "robowr", "0x05", "0x83", "0x00a0");
@@ -71,7 +71,7 @@ void create_mbssid_vlan(void)
 			!nvram_match("wl1.2_lanaccess", "")){
 			/* VID 4001 */
 			eval("vconfig", "add", "eth0", "4001");
-			eval("ifconfig", "vlan4001", "up");
+			eval("ifconfig", "vlan4001", "hw", "ether", nvram_safe_get("lan_hwaddr"), "up");
 			eval("brctl", "addif", "br0", "vlan4001");
 			eval("et", "robowr", "0x05", "0x81", "0x0fa1");
 			eval("et", "robowr", "0x05", "0x83", "0x00a0");
@@ -90,7 +90,7 @@ void create_mbssid_vlan(void)
 			!nvram_match("wl1.3_lanaccess", "")){
 			/* VID 4002 */
 			eval("vconfig", "add", "eth0", "4002");
-			eval("ifconfig", "vlan4002", "up");
+			eval("ifconfig", "vlan4002", "hw", "ether", nvram_safe_get("lan_hwaddr"), "up");
 			eval("brctl", "addif", "br0", "vlan4002");
 			eval("et", "robowr", "0x05", "0x81", "0x0fa2");
 			eval("et", "robowr", "0x05", "0x83", "0x00a0");
@@ -156,6 +156,11 @@ void rpc_parse_nvram_from_httpd(int unit, int subunit)
 			if (ret < 0)
 				dbG("rpc_qcsapi_wifi_disable_wps %s error, return: %d\n", WIFINAME, ret);
 		}
+
+		ret = qcsapi_wps_upnp_enable(WIFINAME, 0);
+		if (ret < 0)
+			dbG("disable WPS UPnP %s error, return: %d\n", WIFINAME, ret);
+
 		if(nvram_get_int("sw_mode") == SW_MODE_ROUTER ||
 			(nvram_get_int("sw_mode") == SW_MODE_AP && nvram_get_int("wlc_psta") == 1)){
 			if(nvram_get_int("wl1_mumimo") == 1){
@@ -168,6 +173,12 @@ void rpc_parse_nvram_from_httpd(int unit, int subunit)
 			if (ret < 0)
 				dbG("enable_mu %s error, return: %d\n", WIFINAME, ret);
 		}
+#ifdef RTCONFIG_IPV6
+		if (get_ipv6_service() == IPV6_DISABLED)
+			qcsapi_wifi_run_script("router_command.sh", "ipv6_off wifi0");
+		else
+			qcsapi_wifi_run_script("router_command.sh", "ipv6_on wifi0");
+#endif
 	}else if (unit == 1 && subunit == 1){
 		if(nvram_get_int("wl1.1_bss_enabled") == 1){
 			rpc_update_mbss("wl1.1_ssid", nvram_safe_get("wl1.1_ssid"));
@@ -181,12 +192,18 @@ void rpc_parse_nvram_from_httpd(int unit, int subunit)
 					dbG("[lanaccess] wifi1 lanaccess off\n");
 					// libqcsapi_client/qtn/qtn_vlan.h
 					// QVLAN_VID_ALL: 0xffff
-					qcsapi_wifi_vlan_config("wifi0", e_qcsapi_vlan_enable, 0xffff /* QVLAN_VID_ALL */, 0);
-					qcsapi_wifi_vlan_config("wifi1", e_qcsapi_vlan_bind, 4000 /* vid */, 0);
+					qcsapi_wifi_vlan_config("wifi0", e_qcsapi_vlan_enable, 0xffff /* QVLAN_VID_ALL */);
+					qcsapi_wifi_vlan_config("wifi1", e_qcsapi_vlan_add, 4000 /* vid */);
 				}else{
-					qcsapi_wifi_vlan_config("wifi1", e_qcsapi_vlan_unbind, 4000 /* vid */, 0);
+					qcsapi_wifi_vlan_config("wifi1", e_qcsapi_vlan_del, 4000 /* vid */);
 				}
 			}
+#ifdef RTCONFIG_IPV6
+			if (get_ipv6_service() == IPV6_DISABLED)
+				qcsapi_wifi_run_script("router_command.sh", "ipv6_off wifi1");
+			else
+				qcsapi_wifi_run_script("router_command.sh", "ipv6_on wifi1");
+#endif
 		}
 		else{
 			qcsapi_wifi_remove_bss(wl_vifname_qtn(unit, subunit));
@@ -204,12 +221,18 @@ void rpc_parse_nvram_from_httpd(int unit, int subunit)
 					dbG("[lanaccess] wifi2 lanaccess off\n");
 					// libqcsapi_client/qtn/qtn_vlan.h
 					// QVLAN_VID_ALL: 0xffff
-					qcsapi_wifi_vlan_config("wifi0", e_qcsapi_vlan_enable, 0xffff /* QVLAN_VID_ALL */, 0);
-					qcsapi_wifi_vlan_config("wifi2", e_qcsapi_vlan_bind, 4001 /* vid */, 0);
+					qcsapi_wifi_vlan_config("wifi0", e_qcsapi_vlan_enable, 0xffff /* QVLAN_VID_ALL */);
+					qcsapi_wifi_vlan_config("wifi2", e_qcsapi_vlan_add, 4001 /* vid */);
 				}else{
-					qcsapi_wifi_vlan_config("wifi1", e_qcsapi_vlan_unbind, 4001 /* vid */, 0);
+					qcsapi_wifi_vlan_config("wifi1", e_qcsapi_vlan_del, 4001 /* vid */);
 				}
 			}
+#ifdef RTCONFIG_IPV6
+			if (get_ipv6_service() == IPV6_DISABLED)
+				qcsapi_wifi_run_script("router_command.sh", "ipv6_off wifi2");
+			else
+				qcsapi_wifi_run_script("router_command.sh", "ipv6_on wifi2");
+#endif
 		}
 		else{
 			qcsapi_wifi_remove_bss(wl_vifname_qtn(unit, subunit));
@@ -227,12 +250,18 @@ void rpc_parse_nvram_from_httpd(int unit, int subunit)
 					dbG("[lanaccess] wifi3 lanaccess off\n");
 					// libqcsapi_client/qtn/qtn_vlan.h
 					// QVLAN_VID_ALL: 0xffff
-					qcsapi_wifi_vlan_config("wifi0", e_qcsapi_vlan_enable, 0xffff /* QVLAN_VID_ALL */, 0);
-					qcsapi_wifi_vlan_config("wifi3", e_qcsapi_vlan_bind, 4002 /* vid */, 0);
+					qcsapi_wifi_vlan_config("wifi0", e_qcsapi_vlan_enable, 0xffff /* QVLAN_VID_ALL */);
+					qcsapi_wifi_vlan_config("wifi3", e_qcsapi_vlan_add, 4002 /* vid */);
 				}else{
-					qcsapi_wifi_vlan_config("wifi1", e_qcsapi_vlan_unbind, 4002 /* vid */, 0);
+					qcsapi_wifi_vlan_config("wifi1", e_qcsapi_vlan_del, 4002 /* vid */);
 				}
 			}
+#ifdef RTCONFIG_IPV6
+			if (get_ipv6_service() == IPV6_DISABLED)
+				qcsapi_wifi_run_script("router_command.sh", "ipv6_off wifi3");
+			else
+				qcsapi_wifi_run_script("router_command.sh", "ipv6_on wifi3");
+#endif
 		}
 		else{
 			qcsapi_wifi_remove_bss(wl_vifname_qtn(unit, subunit));
@@ -241,6 +270,9 @@ void rpc_parse_nvram_from_httpd(int unit, int subunit)
 	if(nvram_get_int("sw_mode") == SW_MODE_ROUTER){
 		create_mbssid_vlan();
 	}
+
+	/* disable UPNP */
+	qcsapi_wps_upnp_enable(WIFINAME, 0);
 
 //	rpc_show_config();
 }
@@ -252,7 +284,6 @@ qtn_monitor_main(int argc, char *argv[])
 	sigset_t sigs_to_catch;
 	int ret, retval = 0;
 	time_t start_time = uptime();
-	uint32_t p_channel;
 
 	/* write pid */
 	if ((fp = fopen("/var/run/qtn_monitor.pid", "w")) != NULL)
@@ -311,7 +342,6 @@ QTN_RESET:
 #if defined(RTCONFIG_JFFS2ND_BACKUP)
 	check_2nd_jffs();
 #endif
-
 	nvram_set("qtn_ready", "1");
 
 	if(nvram_get_int("AllLED") == 0) setAllLedOff();
@@ -410,9 +440,10 @@ ERROR:
 
 	if (nvram_get_int("led_disable") == 1) {
 		setAllLedOff_qtn();
-//                                qcsapi_wifi_run_script("router_command.sh", "wifi_led_off");
-//                                qcsapi_led_set(1, 0);
+//		qcsapi_wifi_run_script("router_command.sh", "wifi_led_off");
+//		qcsapi_led_set(1, 0);
 	}
+
 	return retval;
 }
 #endif

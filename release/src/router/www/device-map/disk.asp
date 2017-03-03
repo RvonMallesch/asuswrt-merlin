@@ -106,23 +106,13 @@ function gotoDM(){
 		dm_http_port = "8081";
 
 	var dm_url = "";
-	if(parent.location.host.split(":").length > 1)
-		dm_url = "http://" + parent.location.host.split(":")[0] + ":" + dm_http_port;
-	else
-		dm_url = "http://" + parent.location.host + ":" + dm_http_port;
-
+	var header_info = [<% get_header_info(); %>];
+	dm_url = "http://" + header_info[0].host + ":" + dm_http_port;
 	window.open(dm_url);
 }
 
-function remove_disk(){
-	var str = "<#Safelyremovedisk_confirm#>";
-	if(confirm(str)){
-		parent.showLoading();
-		
-		document.diskForm.action = "safely_remove_disk.asp";
-		document.diskForm.disk.value = thisForeignDisksIndex;
-		setTimeout("document.diskForm.submit();", 1);
-	}
+function remove_disk_call(){
+	top.remove_disk(thisForeignDisksIndex)
 }
 </script>
 </head>
@@ -202,7 +192,7 @@ function remove_disk(){
   <tr>
     <td height="50" style="padding:10px 15px 0px 15px;">
     	<p class="formfonttitle_nwm" style="float:left;width:138px; "><#Safelyremovedisk_title#>:</p>
-    	<input id="show_remove_button" class="button_gen" type="button" class="button" onclick="remove_disk();" value="<#btn_remove#>">
+    	<input id="show_remove_button" class="button_gen" type="button" class="button" onclick="remove_disk_call();" value="<#btn_remove#>">
     	<div id="show_removed_string" style="display:none;"><#Safelyremovedisk#></div>
 		 <img style="margin-top:5px;" src="/images/New_ui/networkmap/linetwo2.png">
     </td>
@@ -219,7 +209,7 @@ function remove_disk(){
 				<input type="hidden" name="productid" value="<% nvram_get("productid"); %>">
 				<input type="hidden" name="action_mode" value="apply">
 				<input type="hidden" name="action_script" value="reboot">
-				<input type="hidden" name="action_wait" value="160">
+				<input type="hidden" name="action_wait" value="<% get_default_reboot_time(); %>">
 				<input type="hidden" name="preferred_lang" id="preferred_lang" value="<% nvram_get("preferred_lang"); %>">
 				<input type="hidden" name="usb_usb3" value="<% nvram_get("usb_usb3"); %>">
 			

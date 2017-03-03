@@ -1,4 +1,4 @@
-/* Copyright (c) 2007-2013, The Tor Project, Inc. */
+/* Copyright (c) 2007-2016, The Tor Project, Inc. */
 /* See LICENSE for licensing information */
 
 /**
@@ -10,7 +10,7 @@
 #include "nodelist.h"
 #include "test.h"
 
-/** Tese the case when node_get_by_id() returns NULL,
+/** Test the case when node_get_by_id() returns NULL,
  * node_get_verbose_nickname_by_id should return the base 16 encoding
  * of the id.
  */
@@ -23,9 +23,9 @@ test_nodelist_node_get_verbose_nickname_by_id_null_node(void *arg)
   (void) arg;
 
   /* make sure node_get_by_id returns NULL */
-  test_assert(!node_get_by_id(ID));
+  tt_assert(!node_get_by_id(ID));
   node_get_verbose_nickname_by_id(ID, vname);
-  test_streq(vname, "$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
+  tt_str_op(vname,OP_EQ, "$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
  done:
   return;
 }
@@ -54,7 +54,47 @@ test_nodelist_node_get_verbose_nickname_not_named(void *arg)
           "\xAA\xAA\xAA\xAA\xAA\xAA\xAA\xAA\xAA\xAA",
           DIGEST_LEN);
   node_get_verbose_nickname(&mock_node, vname);
-  test_streq(vname, "$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA~TestOR");
+  tt_str_op(vname,OP_EQ, "$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA~TestOR");
+
+ done:
+  return;
+}
+
+/** A node should be considered a directory server if it has an open dirport
+ * of it accepts tunnelled directory requests.
+ */
+static void
+test_nodelist_node_is_dir(void *arg)
+{
+  (void)arg;
+
+  routerstatus_t rs;
+  routerinfo_t ri;
+  node_t node;
+  memset(&node, 0, sizeof(node_t));
+  memset(&rs, 0, sizeof(routerstatus_t));
+  memset(&ri, 0, sizeof(routerinfo_t));
+
+  tt_assert(!node_is_dir(&node));
+
+  node.rs = &rs;
+  tt_assert(!node_is_dir(&node));
+
+  rs.is_v2_dir = 1;
+  tt_assert(node_is_dir(&node));
+
+  rs.is_v2_dir = 0;
+  rs.dir_port = 1;
+  tt_assert(! node_is_dir(&node));
+
+  node.rs = NULL;
+  tt_assert(!node_is_dir(&node));
+  node.ri = &ri;
+  ri.supports_tunnelled_dir_requests = 1;
+  tt_assert(node_is_dir(&node));
+  ri.supports_tunnelled_dir_requests = 0;
+  ri.dir_port = 1;
+  tt_assert(! node_is_dir(&node));
 
  done:
   return;
@@ -66,6 +106,7 @@ test_nodelist_node_get_verbose_nickname_not_named(void *arg)
 struct testcase_t nodelist_tests[] = {
   NODE(node_get_verbose_nickname_by_id_null_node, TT_FORK),
   NODE(node_get_verbose_nickname_not_named, TT_FORK),
+  NODE(node_is_dir, TT_FORK),
   END_OF_TESTCASES
 };
 

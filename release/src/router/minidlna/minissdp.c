@@ -88,62 +88,6 @@ AddMulticastMembership(int s, struct lan_addr_s *iface)
 	return 0;
 }
 
-static int
-DropMulticastMembership(int s, struct lan_addr_s *iface)
-{
-	int ret;
-#ifdef HAVE_STRUCT_IP_MREQN
-	struct ip_mreqn imr;	/* Ip multicast membership */
-	/* setting up imr structure */
-	memset(&imr, '\0', sizeof(imr));
-	imr.imr_multiaddr.s_addr = inet_addr(SSDP_MCAST_ADDR);
-	imr.imr_ifindex = iface->ifindex;
-#else
-	struct ip_mreq imr;	/* Ip multicast membership */
-	/* setting up imr structure */
-	memset(&imr, '\0', sizeof(imr));
-	imr.imr_multiaddr.s_addr = inet_addr(SSDP_MCAST_ADDR);
-	imr.imr_interface.s_addr = iface->addr.s_addr;
-#endif
-	ret = setsockopt(s, IPPROTO_IP, IP_DROP_MEMBERSHIP, (void *)&imr, sizeof(imr));
-	if (ret < 0 && errno != EADDRINUSE)
-	{
-		DPRINTF(E_DEBUG, L_SSDP, "setsockopt(udp, IP_DEL_MEMBERSHIP): %s\n",
-			strerror(errno));
-		return -1;
-	}
-
-	return 0;
-}
-
-#if 0
-void
-renew_mcast_membership(struct lan_addr_s *iface)
-{
-	if (DropMulticastMembership(sssdp, iface) < 0)
-	{
-		DPRINTF(E_DEBUG, L_SSDP, "Failed to drop multicast membership for address %s\n",
-			iface->str);
-	}
-
-	if (AddMulticastMembership(sssdp, iface) < 0)
-	{
-		DPRINTF(E_ERROR, L_SSDP, "Failed to add multicast membership for address %s\n",
-			iface->str);
-	}
-}
-
-void
-mcast_refresh()
-{
-	int i;
-
-	if (sssdp)
-	for (i = 0; i < n_lan_addr; i++)
-		renew_mcast_membership(&lan_addr[n_lan_addr]);
-}
-#endif
-
 /* Open and configure the socket listening for 
  * SSDP udp packets sent on 239.255.255.250 port 1900 */
 int
@@ -192,12 +136,8 @@ OpenAndConfSSDPNotifySocket(struct lan_addr_s *iface)
 {
 	int s;
 	unsigned char loopchar = 0;
-	/* no need
 	int bcast = 1;
-	*/
-	uint8_t ttl = 2; /* UDA v1.1 says :
-		The TTL for the IP packet SHOULD default to 2 and
-		SHOULD be configurable. */
+	uint8_t ttl = 4;
 	struct in_addr mc_if;
 	struct sockaddr_in sockname;
 	
@@ -225,15 +165,13 @@ OpenAndConfSSDPNotifySocket(struct lan_addr_s *iface)
 	}
 
 	setsockopt(s, IPPROTO_IP, IP_MULTICAST_TTL, &ttl, sizeof(ttl));
-
-	/* no need
+	
 	if (setsockopt(s, SOL_SOCKET, SO_BROADCAST, &bcast, sizeof(bcast)) < 0)
 	{
 		DPRINTF(E_ERROR, L_SSDP, "setsockopt(udp_notify, SO_BROADCAST): %s\n", strerror(errno));
 		close(s);
 		return -1;
 	}
-	*/
 
 	memset(&sockname, 0, sizeof(struct sockaddr_in));
 	sockname.sin_family = AF_INET;
@@ -244,12 +182,6 @@ OpenAndConfSSDPNotifySocket(struct lan_addr_s *iface)
 		DPRINTF(E_ERROR, L_SSDP, "bind(udp_notify): %s\n", strerror(errno));
 		close(s);
 		return -1;
-	}
-
-	if (DropMulticastMembership(sssdp, iface) < 0)
-	{
-		DPRINTF(E_DEBUG, L_SSDP, "Failed to drop multicast membership for address %s\n",
-			iface->str);
 	}
 
 	if (AddMulticastMembership(sssdp, iface) < 0)
@@ -323,6 +255,7 @@ SendSSDPResponse(int s, struct sockaddr_in sockname, int st_no,
 	DPRINTF(E_DEBUG, L_SSDP, "Sending M-SEARCH response to %s:%d ST: %s\n",
 		inet_ntoa(sockname.sin_addr), ntohs(sockname.sin_port),
 		known_service_types[st_no]);
+ 
 	n = sendto(s, buf, l, 0,
 	           (struct sockaddr *)&sockname, sizeof(struct sockaddr_in) );
 	if (n < 0)
@@ -543,7 +476,7 @@ close:
 	else
 	{
 		client->type = &client_types[type];
-		client->age = uptime();
+		client->age = time(NULL);
 	}
 }
 
@@ -647,7 +580,7 @@ ProcessSSDPRequest(int s, unsigned short port)
 				if (client->type->type < EStandardDLNA150 &&
 				    client->type->type != ESamsungSeriesA)
 				{
-					client->age = uptime();
+					client->age = time(NULL);
 					return;
 				}
 			}
@@ -674,6 +607,7 @@ ProcessSSDPRequest(int s, unsigned short port)
 			{
 				st = bufr+i+3;
 				st_len = 0;
+
 				while (*st == ' ' || *st == '\t')
 					st++;
 				while (st[st_len]!='\r' && st[st_len]!='\n')

@@ -14,13 +14,14 @@
 
 <script language="JavaScript" type="text/javascript" src="/state.js"></script>
 <script language="JavaScript" type="text/javascript" src="/general.js"></script>
-<script type="text/javascript" src="/validator.js"></script>
+<script language="JavaScript" type="text/javascript" src="/validator.js"></script>
 <script language="JavaScript" type="text/javascript" src="/popup.js"></script>
 <script language="JavaScript" type="text/javascript" src="/help.js"></script>
 <script language="JavaScript" type="text/javascript" src="/merlin.js"></script>
 <script language="JavaScript" type="text/javascript" src="/tmmenu.js"></script>
-<script type="text/javascript" src="/js/jquery.js"></script>
-<script type="text/javascript" src="/disk_functions.js"></script>
+<script language="JavaSCript" type="text/javascript" src="/js/jquery.js"></script>
+<script language="JavaScript" type="text/javascript" src="/disk_functions.js"></script>
+
 <style type="text/css">
 /* folder tree */
 .mask_bg{
@@ -75,6 +76,8 @@ var _layer_order = "";
 var FromObject = "0";
 var lastClickedObj = 0;
 var disk_flag=0;
+var machine_name = '<% get_machine_name(); %>';
+
 window.onresize = cal_panel_block;
 
 
@@ -104,10 +107,13 @@ function initial() {
 	if (document.form.usb_idle_exclude.value.indexOf("i") != -1)
 		document.form.usb_idle_exclude_i.checked = true;
 
-	if ((productid == "RT-AC56U") || (productid == "RT-AC68U") || (productid == "RT-AC87U") ||
-	    (productid == "RT-AC3200") || (productid == "RT-AC88U") || (productid == "RT-AC3100") || (productid == "RT-AC5300"))
-		document.getElementById("ct_established_default").innerHTML = "Default: 2400";
+	if(!live_update_support)
+		document.getElementById("fwcheck").style.display="none";
 
+	if (machine_name.search("arm") != -1) {
+		document.getElementById("ct_established_default").innerHTML = "Default: 2400";
+		showhide("memory_mgmt_tr" ,1);
+	}
 	document.aidiskForm.protocol.value = PROTOCOL;
 	initial_dir();
 }
@@ -147,14 +153,14 @@ function get_disk_tree(){
 }
 function get_layer_items(layer_order){
 	$.ajax({
-    		url: '/gettree.asp?layer_order='+layer_order,
-    		dataType: 'script',
-    		error: function(xhr){
-    			;
-    		},
-    		success: function(){
+		url: '/gettree.asp?layer_order='+layer_order,
+		dataType: 'script',
+		error: function(xhr){
+			;
+		},
+		success: function(){
 				get_tree_items(treeitems);
-  			}
+			}
 		});
 }
 function get_tree_items(treeitems){
@@ -205,9 +211,9 @@ function BuildTree(){
 		layer = get_layer(ItemBarCode.substring(1));
 		if(layer == 3){
 			if(ItemText.length > 21)
-		 		short_ItemText = ItemText.substring(0,30)+"...";
-		 	else
-		 		short_ItemText = ItemText;
+				short_ItemText = ItemText.substring(0,30)+"...";
+			else
+				short_ItemText = ItemText;
 		}
 		else
 			short_ItemText = ItemText;
@@ -710,7 +716,7 @@ function done_validating(action){
 					</tr>
 
 					<tr id="rstats_stime_tr">
-						<th>Save frequency:</th>
+						<th>Save frequency</th>
 						<td>
 							<select name="rstats_stime" class="input_option" >
 								<option value="1" <% nvram_match("rstats_stime", "1","selected"); %>>Every 1 hour</option>
@@ -758,17 +764,17 @@ function done_validating(action){
 							<input type="radio" name="cstats_all" class="input" value="1" <% nvram_match_x("", "cstats_all", "1", "checked"); %> onclick="hide_cstats_ip(this.value);"><#checkbox_Yes#>
 							<input type="radio" name="cstats_all" class="input" value="0" <% nvram_match_x("", "cstats_all", "0", "checked"); %> onclick="hide_cstats_ip(this.value);"><#checkbox_No#>
 						</td>
-        				</tr>
+					</tr>
 					<tr id="cstats_inc_tr">
 						<th>List of IPs to monitor (comma-separated):</th>
 						<td>
-							<input type="text" maxlength="512" class="input_32_table" name="cstats_include" onKeyPress="return validate_iplist(this,event);" onchange="update_filter(this,this.value);" value="<% nvram_get("cstats_include"); %>">
+							<input type="text" maxlength="512" class="input_32_table" name="cstats_include" onKeyPress="return validator.ipList(this,event);" onchange="update_filter(this,this.value);" value="<% nvram_get("cstats_include"); %>">
 						</td>
 					</tr>
 					<tr id="cstats_exc_tr">
 						<th>List of IPs to exclude (comma-separated):</th>
 						<td>
-							<input type="text" maxlength="512" class="input_32_table" name="cstats_exclude" onKeyPress="return validate_iplist(this,event);" onchange="update_filter(this,this.value);" value="<% nvram_get("cstats_exclude"); %>">
+							<input type="text" maxlength="512" class="input_32_table" name="cstats_exclude" onKeyPress="return validator.ipList(this,event);" onchange="update_filter(this,this.value);" value="<% nvram_get("cstats_exclude"); %>">
 						</td>
 					</tr>
 
@@ -816,6 +822,14 @@ function done_validating(action){
 							<input type="radio" name="led_disable" class="input" value="0" <% nvram_match_x("", "led_disable", "0", "checked"); %>><#checkbox_No#>
 						</td>
 					</tr>
+					<tr id="fwcheck">
+						<th><a name="fwcheck"></a><a class="hintstyle" href="javascript:void(0);" onClick="openHint(50,15);">New firmware version check</a></th>
+						<td>
+							<input type="radio" name="firmware_check_enable" class="input" value="1" <% nvram_match("firmware_check_enable", "1", "checked"); %>><#checkbox_Yes#>
+							<input type="radio" name="firmware_check_enable" class="input" value="0" <% nvram_match("firmware_check_enable", "0", "checked"); %>><#checkbox_No#>
+						</td>
+					</tr>
+
 				</table>
 
 				<table width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3"  class="FormTable">
@@ -824,7 +838,7 @@ function done_validating(action){
 							<td colspan="2">TCP/IP settings</td>
 						</tr>
 					</thead>
- 					<tr>
+					<tr>
 						<th>TCP connections limit</th>
 						<td>
 							<input type="text" maxlength="6" class="input_12_table" name="ct_max" onKeyPress="return validator.isNumber(this,event);" onblur="validate_number_range(this, 256, 300000)" value="<% nvram_get("ct_max"); %>">
@@ -919,42 +933,28 @@ function done_validating(action){
 						</tr>
 					</thead>
 					<tr>
-						<th>Networkmap: hourly full network rescans (default: Yes)</th>
-						<td>
-							<input type="radio" name="nmap_hm_scan" class="input" value="1" <% nvram_match_x("", "nmap_hm_scan", "1", "checked"); %>><#checkbox_Yes#>
-							<input type="radio" name="nmap_hm_scan" class="input" value="0" <% nvram_match_x("", "nmap_hm_scan", "0", "checked"); %>><#checkbox_No#>
-						</td>
-					</tr>
-					<tr>
 						<th>Samba: Enable SMB2 protocol (default: No)</th>
 						<td>
 							<input type="radio" name="smbd_enable_smb2" class="input" value="1" <% nvram_match_x("", "smbd_enable_smb2", "1", "checked"); %>><#checkbox_Yes#>
 							<input type="radio" name="smbd_enable_smb2" class="input" value="0" <% nvram_match_x("", "smbd_enable_smb2", "0", "checked"); %>><#checkbox_No#>
 						</td>
 	                                </tr>
-					<tr>
-						<th>Memory Management: Regularly flush caches (ARM only) (default: Yes)</th>
+					<tr id="memory_mgmt_tr" style="display:none;">
+						<th><a class="hintstyle" href="javascript:void(0);" onClick="openHint(50,2);">Memory Management: Regularly flush caches (default: Yes)</a></th>
 						<td>
 							<input type="radio" name="drop_caches" class="input" value="1" <% nvram_match_x("", "drop_caches", "1", "checked"); %>><#checkbox_Yes#>
 							<input type="radio" name="drop_caches" class="input" value="0" <% nvram_match_x("", "drop_caches", "0", "checked"); %>><#checkbox_No#>
 						</td>
 					</tr>
 					<tr>
-						<th>Miniupnp: Enable secure mode (default: Yes)</th>
+						<th><a class="hintstyle" href="javascript:void(0);" onClick="openHint(50,3);">Miniupnp: Enable secure mode (default: Yes)</a></th>
 						<td>
 							<input type="radio" name="upnp_secure" class="input" value="1" <% nvram_match_x("", "upnp_secure", "1", "checked"); %>><#checkbox_Yes#>
 							<input type="radio" name="upnp_secure" class="input" value="0" <% nvram_match_x("", "upnp_secure", "0", "checked"); %>><#checkbox_No#>
 						</td>
 					</tr>
 					<tr>
-						<th>DLNA: Run a full media rescan at start (default: Yes)</th>
-						<td>
-							<input type="radio" name="dms_rescan" class="input" value="1" <% nvram_match_x("", "dms_rescan", "1", "checked"); %>><#checkbox_Yes#>
-							<input type="radio" name="dms_rescan" class="input" value="0" <% nvram_match_x("", "dms_rescan", "0", "checked"); %>><#checkbox_No#>
-						</td>
-					</tr>
-					<tr>
-						<th>firewall: Drop IPv6 neighbour solicitation broadcasts (Comcast fix) (default: No)</th>
+						<th><a class="hintstyle" href="javascript:void(0);" onClick="openHint(50,4);">Firewall: Drop IPv6 neighbour solicitation broadcasts (default: No)</a></th>
 						<td>
 							<input type="radio" name="ipv6_ns_drop" class="input" value="1" <% nvram_match_x("", "ipv6_ns_drop", "1", "checked"); %>><#checkbox_Yes#>
 							<input type="radio" name="ipv6_ns_drop" class="input" value="0" <% nvram_match_x("", "ipv6_ns_drop", "0", "checked"); %>><#checkbox_No#>

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015, Broadcom Corporation. All Rights Reserved.
+ * Copyright (C) 2016, Broadcom. All Rights Reserved.
  * 
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -15,7 +15,7 @@
  *
  * Fundamental types and constants relating to 802.11
  *
- * $Id: 802.11.h 502280 2014-09-12 09:45:12Z $
+ * $Id: 802.11.h 587683 2015-09-22 00:47:41Z $
  */
 
 #ifndef _802_11_H_

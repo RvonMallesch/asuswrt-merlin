@@ -11,6 +11,7 @@
 <title><#Web_Title#> - <#menu5_3_4#></title>
 <link rel="stylesheet" type="text/css" href="index_style.css"> 
 <link rel="stylesheet" type="text/css" href="form_style.css">
+<link rel="stylesheet" type="text/css" href="device-map/device-map.css">
 <script language="JavaScript" type="text/javascript" src="/state.js"></script>
 <script type="text/javascript" language="JavaScript" src="/help.js"></script>
 <script language="JavaScript" type="text/javascript" src="/general.js"></script>
@@ -61,7 +62,7 @@ function initial(){
 	show_menu();
 	loadAppOptions();
 	loadGameOptions();
-	setTimeout("showLANIPList();", 1000);	
+	setTimeout("showDropdownClientList('setClientIP', 'ip', 'all', 'ClientList_Block', 'pull_arrow', 'online');", 1000);	
 	showvts_rulelist();
 	addOnlineHelp(document.getElementById("faq"), ["ASUSWRT", "port", "forwarding"]);
 
@@ -72,6 +73,13 @@ function initial(){
 
 	//if(dualWAN_support && wans_mode == "lb")
 	//	document.getElementById("lb_note").style.display = "";
+
+	if('<% get_parameter("af"); %>' == 'KnownApps' && '<% get_parameter("item"); %>' == 'ftp'){
+		var KnownApps = document.form.KnownApps;
+		KnownApps.options[1].selected = 1;
+		change_wizard(KnownApps, 'KnownApps');
+		if(addRow_Group(32)) applyRule();
+	}
 }
 
 function isChange(){
@@ -207,47 +215,23 @@ function change_wizard(o, id){
 function setClientIP(num){
 	document.form.vts_ipaddr_x_0.value = num;
 	hideClients_Block();
-	over_var = 0;
-}
-
-function showLANIPList(){
-	var htmlCode = "";
-	for(var i=0; i<clientList.length;i++){
-		var clientObj = clientList[clientList[i]];
-
-		if(clientObj.isOnline) {
-			if(clientObj.name.length > 30) clientObj.name = clientObj.name.substring(0, 28) + "..";
-
-			htmlCode += '<a><div onmouseover="over_var=1;" onmouseout="over_var=0;" onclick="setClientIP(\'';
-			htmlCode += clientObj.ip;
-			htmlCode += '\');"><strong>';
-			htmlCode += clientObj.ip + '</strong>&nbsp;&nbsp;(' + clientObj.name + ')';
-			htmlCode += '</strong></div></a><!--[if lte IE 6.5]><iframe class="hackiframe2"></iframe><![endif]-->';	
-		}
-	}
-
-	document.getElementById("ClientList_Block").innerHTML = htmlCode;
 }
 
 function pullLANIPList(obj){
-	
+	var element = document.getElementById('ClientList_Block');
+	var isMenuopen = element.offsetWidth > 0 || element.offsetHeight > 0;
 	if(isMenuopen == 0){		
 		obj.src = "/images/arrow-top.gif"
-		document.getElementById("ClientList_Block").style.display = 'block';		
-		document.form.vts_ipaddr_x_0.focus();		
-		isMenuopen = 1;
+		element.style.display = 'block';		
+		document.form.vts_ipaddr_x_0.focus();
 	}
 	else
 		hideClients_Block();
 }
 
-var over_var = 0;
-var isMenuopen = 0;
-
 function hideClients_Block(){
 	document.getElementById("pull_arrow").src = "/images/arrow-down.gif";
 	document.getElementById('ClientList_Block').style.display='none';
-	isMenuopen = 0;
 	validator.validIPForm(document.form.vts_ipaddr_x_0, 0);
 }
 /*----------} Mouse event of fake LAN IP select menu-----------------*/
@@ -315,7 +299,7 @@ function addRow_Group(upper){
 		var item_num = document.getElementById('vts_rulelist_table').rows[0].cells.length;	
 		if(rule_num >= upper){
 				alert("<#JS_itemlimit1#> " + upper + " <#JS_itemlimit2#>");
-				return;
+				return false;
 		}	
 		
 //Viz check same rule  //match(out port+out_proto) is not accepted
@@ -331,7 +315,7 @@ function addRow_Group(upper){
 									document.form.vts_port_x_0.value =="";
 									document.form.vts_port_x_0.focus();
 									document.form.vts_port_x_0.select();							
-									return;
+									return false;
 							}
 						}else{
 							if(document.form.vts_port_x_0.value == document.getElementById('vts_rulelist_table').rows[i].cells[1].innerHTML){
@@ -339,7 +323,7 @@ function addRow_Group(upper){
 									document.form.vts_port_x_0.value =="";
 									document.form.vts_port_x_0.focus();
 									document.form.vts_port_x_0.select();							
-									return;
+									return false;
 							}
 						}	
 				}	
@@ -363,6 +347,8 @@ function addRow_Group(upper){
 			backup_proto = "";
 			document.getElementById('vts_rulelist_table').rows[rule_num-1].scrollIntoView();
 		}
+
+		return true;
 	}
 }
 
@@ -671,9 +657,9 @@ function changeBgColor(obj, num){
 					<input type="text" maxlength="" class="input_12_table" name="vts_port_x_0" onkeypress="return validator.isPortRange(this, event)" autocorrect="off" autocapitalize="off"/>
 				</td>
 				<td width="21%">
-					<input type="text" maxlength="15" class="input_15_table" name="vts_ipaddr_x_0" align="left" onkeypress="return validator.isIPAddr(this, event)" style="float:left;"/ autocomplete="off" onblur="if(!over_var){hideClients_Block();}" onClick="hideClients_Block();" autocorrect="off" autocapitalize="off">
-					<img id="pull_arrow" height="14px;" src="images/arrow-down.gif" align="right" onclick="pullLANIPList(this);" title="<#select_IP#>" onmouseover="over_var=1;" onmouseout="over_var=0;">
-					<div id="ClientList_Block" class="ClientList_Block"></div>
+					<input type="text" maxlength="15" class="input_15_table" name="vts_ipaddr_x_0" align="left" onkeypress="return validator.isIPAddr(this, event)" style="float:left;"/ autocomplete="off" onClick="hideClients_Block();" autocorrect="off" autocapitalize="off">
+					<img id="pull_arrow" height="14px;" src="images/arrow-down.gif" align="right" onclick="pullLANIPList(this);" title="<#select_IP#>">
+					<div id="ClientList_Block" class="clientlist_dropdown" style="margin-left:2px;margin-top:25px;"></div>
 				</td>
 				<td width="10%">
 					<input type="text" maxlength="5"  class="input_6_table" name="vts_lport_x_0" onKeyPress="return validator.isNumber(this,event);" autocorrect="off" autocapitalize="off"/>

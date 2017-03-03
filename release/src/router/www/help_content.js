@@ -14,7 +14,7 @@ helpcontent[0] = new Array("",
 			"<#WLANConfig11b_WEPKey_itemtype1#>",
 			"<#WLANConfig11b_WEPKey_itemtype2#>",
 			"<#WLANConfig11b_ChannelBW_itemdesc#><br/><#WLANConfig11b_Wireless_Speed_itemname_3#>",
-			"To locate the 40MHz channel in combination with the control channel", //<#WLANConfig11b_EChannel_itemdesc#>
+			"<#WLANConfig11b_EChannel_itemdesc#>",
 			"<#WLANConfig11b_TxPower_help1#>",
 			"<#WLANConfig11b_TxPower_help#>",
 			"WEP-64bits: <#WLANConfig11b_WEPKey_itemtype1#><br/>WEP-128bits: <#WLANConfig11b_WEPKey_itemtype2#>",
@@ -63,16 +63,17 @@ helpcontent[3] = new Array("",
 							"<#WLANConfig11b_x_EnhanInter_itemdesc#>", //21
 							"<#WLANConfig11b_x_IgmpSnEnable_itemdesc#>",
 							"<#WLANConfig11b_x_SchedEnable_itemdesc#>",
-							"<#WLANConfig11b_x_ExpBeam_desc#> (It's also called [Explicit Beamforming].)",
-							"<#WLANConfig11b_x_ImpBeam_desc#> (It's also called [Implicit Beamforming].)",
+							"<#WLANConfig11b_x_ExpBeam_desc#> (It's also called [Explicit Beamforming].)",	/* untranslated */
+							"<#WLANConfig11b_x_ImpBeam_desc#> (It's also called [Implicit Beamforming].)",	/* untranslated */
 							"<#WLANConfig11b_x_AMPDU_desc#>",
 							"<#WLANConfig11b_x_ACK_desc#>",
 							"<#WLANConfig11b_x_TurboQAM_desc#> <#WLANConfig11b_x_Auto#>",
 							"<#WLANConfig11b_x_ReduceUSB3_desc#>",
 							"<#RTS_for_AMPDU#>",
 							"<#WLANConfig11b_x_roamingassit_desc#>",	//31
-							"Provide Airtime Fairness between multiple links",
-							"<#WLANConfig11b_x_Auto#>"
+							"Provide Airtime Fairness between multiple links",	/* untranslated */
+							"<#WLANConfig11b_x_Auto#>",
+							"Enable/Disable Bluetooth Coexisistence. Data rate 1Mbps and 2 Mbps are not allowed in Pre-emptive mode. TX Bursting is also not allowed in Pre-emptive mode."
 							 );
 
 helpcontent[4] = new Array("",
@@ -137,7 +138,7 @@ helpcontent[7] = new Array("",
 //Firewall
 helpcontent[8] = new Array("",
 						   "<#FirewallConfig_WanLanLog_itemdesc#>",
-						   "<#FirewallConfig_x_WanWebEnable_itemdesc#>",
+						   "<#FirewallConfig_x_WanWebEnable_itemdesc#> Notice that this option will control http and https port access from WAN interface.",	/* untranslated */
 						   "<#FirewallConfig_x_WanWebPort_itemdesc#>",
 						   "<#FirewallConfig_x_WanLPREnable_itemdesc#>",
 						   "<#FirewallConfig_x_WanPingEnable_itemdesc#>",
@@ -159,9 +160,10 @@ helpcontent[11] = new Array("",
 							"<#LANHostConfig_x_NTPServer_itemdesc#>",
 							"<#QIS_pass_desc2#> <#LANHostConfig_x_Password_itemdesc#>",
 							"<#QIS_pass_desc2#> <#File_Pop_content_alert_desc3#>",
-							"This feature allows browser to redirect to failed connection warning page when Internet is down, if disabled warning page would not appear.",
-							"To set your clock forward one hour in the spring when DST (Daylight Saving Time) starts",
-							"To set your clock back one hour in the fall when DST (Daylight Saving Time) ends");
+							"This feature allows browser to redirect to failed connection warning page when Internet is down, if disabled warning page would not appear.",	/* untranslated */
+							"To set your clock forward one hour in the spring when DST (Daylight Saving Time) starts",	/* untranslated */
+							"To set your clock back one hour in the fall when DST (Daylight Saving Time) ends"	/* untranslated */
+		);
 //Log
 helpcontent[12] = new Array("",
 							"<#General_x_SystemUpTime_itemdesc#>",
@@ -262,8 +264,8 @@ helpcontent[24] = new Array("",
 							"<#qis_wireless_help1#>",											//0,22	
 							"<#qis_wireless_help2#>");										//0,23
 
-//DSL
-helpcontent[25] = new Array("",
+//DSL	/* untranslated */
+helpcontent[25] = new Array("",	
 							"<#DSL_Stab_Adjustment#>",
 							"<#DSL_SRA_itemdesc#>",
 							"<#DSL_Bitswap_id#>",
@@ -307,8 +309,32 @@ helpcontent[28] = new Array("",
 							"<#Mobile_Usage_Limit_Desc#>",
 							"<#Mobile_Usage_Alert_Desc#>",
 							"<#Mobile_SMS_Noti_Desc#>");
-
+						
 //Switch Control
 helpcontent[29] = new Array("",
-							"This item had various names: Port Trunking/ Bonding/ Teaming/ Link Aggregation/ 802.3ad.");/*untranslated*/
+							"This item had various names: Port Trunking/ Bonding/ Teaming/ Link Aggregation/ 802.3ad.",	/*untranslated*/
+							"When NAT Acceleration enabled, switch can handle the network packets by itself and bypass CPU. It can increases NAT throughput but some features may not work precisely, such as time scheduling, traditional QoS and bandwidth limiter on guest network, etc. If you set NAT acceleration as auto, it will be disable automatically once these features are enabled."	/*untranslated*/
+							);
 
+helpcontent[30] = new Array("",
+							"Send alert before monthly alert is reached",/*untranslated*/
+							"Cut-off internet if monthly limit is reached");/*untranslated*/
+helpcontent[50] = new Array("",
+				"<#IPConnection_LocalIP_itemdesc#> or fixed Interface (Device) ID starting with ::<br/>A fixed Interface ID is commonly an EUI-64 address.",
+				"On ARM routers, Asus regularly flushes caches, which can hurt performance while preserving a maximum amount of available RAM.",
+				"By default miniupnpd runs in secure mode, which prevents a client to forward a port to another IP than its own.",
+				"Some IPv6-enabled Comcast customers are getting flooded by Neighbour Solicitation traffic.  This option allows you to filter out this unwanted traffic.",
+				"Tell dnsmasq that hostname lookups within the router's local domain should be forwarded to the upstream DNS configured on your WAN interface.<br>Useful if your upstream DNS is, for example, a Windows server.",
+				"Ensures that DNS lookups haven't been hijacked by a malicious third party when querying a DNSSEC-enabled domain.<br>Make sure your WAN/ISP DNS are DNSSEC-compatible.",
+				"Some ISPs like Sky (UK) require a clientid to be provided for customer authentication.",
+				"Some ISPs like SFR (FR) require a vendor class ID to be provided for identification purposes.",
+				"The NAT loopback allows you to access a forwarded port from within your LAN, through your WAN IP/hostname.<br>Switch to Merlin if you are having issues with the default Asus method.",
+				"Allows you to use SSH port tunneling",
+				"Log level used for messages generated by the core firmware",
+				"Filter out what minimum level get logged in the system log",
+				"The JFFS partition is a portion of the router flash memory which contains data such as OpenVPN key/cers and user created scripts.  It's strongly recommended to create a backup of it before updating your firmware.",
+				"Disabled: Actively block the port used by the protocol<br><br>Enabled: Allow NAT traffic through the protocol's port<br><br>Enabled+NAT Helper: Allow NAT traffic, and use a Netfilter module to help handle NAT forwarding for that protocol's traffic",
+				"This feature tells the router to regularly check for the availability of a new firmware version and to notify you if there is one available.  You can manually initiate that check from the Firmware Upgrade page.  You must still manually download and update your router afterward.",
+				"OpenVPN can automatically negotiate the cipher based on a list.  Requires OpenVPN 2.4.  For older remote client/servers, disable it, or use Enabled with Fallback mode, which will use the legacy cipher parameter when connecting to older remotes.",
+				"MiniDLNA can offer a web page showing the number of indexed media files and a list of DLNA clients.  Default address is http://router.asus.com:8200/");
+// Last: 50,17

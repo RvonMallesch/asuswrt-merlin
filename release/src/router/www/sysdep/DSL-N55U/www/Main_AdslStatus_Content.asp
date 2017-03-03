@@ -44,19 +44,19 @@ function showadslbootTime(){
 		Minutes = Math.floor(adsl_boottime % 3600 / 60);
 		Seconds = Math.floor(adsl_boottime % 60);
 
-		$("boot_days").innerHTML = Days;
-		$("boot_hours").innerHTML = Hours;
-		$("boot_minutes").innerHTML = Minutes;
-		$("boot_seconds").innerHTML = Seconds;
+		document.getElementById("boot_days").innerHTML = Days;
+		document.getElementById("boot_hours").innerHTML = Hours;
+		document.getElementById("boot_minutes").innerHTML = Minutes;
+		document.getElementById("boot_seconds").innerHTML = Seconds;
 		adsl_boottime += 1;
 		setTimeout("showadslbootTime()", 1000);
 	}
 	else
 	{
-		$("boot_days").innerHTML = "0";
-		$("boot_hours").innerHTML = "0";
-		$("boot_minutes").innerHTML = "0";
-		$("boot_seconds").innerHTML = "0";
+		document.getElementById("boot_days").innerHTML = "0";
+		document.getElementById("boot_hours").innerHTML = "0";
+		document.getElementById("boot_minutes").innerHTML = "0";
+		document.getElementById("boot_seconds").innerHTML = "0";
 	}
 }
 
@@ -122,7 +122,7 @@ function replace_ContentAnnex(oldMod, newMod){
 		  			<div>&nbsp;</div>
 		  			<div class="formfonttitle"><#System_Log#> - <#menu_dsl_log#></div>
 		  			<div style="margin-left:5px;margin-top:10px;margin-bottom:10px"><img src="/images/New_ui/export/line_export.png"></div>
-		  			<div class="formfontdesc"><#GeneralLog_title#></div>
+		  			<div class="formfontdesc">This page shows the detailed DSL status.</div>
 						<table width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable">
 							<tr>
 								<th width="20%"><#adsl_fw_ver_itemname#></th>

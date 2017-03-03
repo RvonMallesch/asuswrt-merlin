@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2013, The Tor Project, Inc. */
+/* Copyright (c) 2012-2016, The Tor Project, Inc. */
 /* See LICENSE for licensing information */
 
 #include "orconfig.h"
@@ -13,10 +13,6 @@
 #include "crypto_curve25519.h"
 #include "onion_ntor.h"
 
-#ifndef CURVE25519_ENABLED
-#error "This isn't going to work without curve25519."
-#endif
-
 #define N_ARGS(n) STMT_BEGIN {                                  \
     if (argc < (n)) {                                           \
       fprintf(stderr, "%s needs %d arguments.\n",argv[1],n);    \
@@ -25,7 +21,7 @@
   } STMT_END
 #define BASE16(idx, var, n) STMT_BEGIN {                                \
     const char *s = argv[(idx)];                                        \
-    if (base16_decode((char*)var, n, s, strlen(s)) < 0 ) {              \
+    if (base16_decode((char*)var, n, s, strlen(s)) < (int)n ) {              \
       fprintf(stderr, "couldn't decode argument %d (%s)\n",idx,s);      \
       return 1;                                                         \
     }                                                                   \
@@ -110,6 +106,7 @@ server1(int argc, char **argv)
  done:
   tor_free(keys);
   tor_free(hexkeys);
+  dimap_free(keymap, NULL);
   return result;
 }
 
@@ -130,7 +127,7 @@ client2(int argc, char **argv)
 
   keys = tor_malloc(keybytes);
   hexkeys = tor_malloc(keybytes*2+1);
-  if (onion_skin_ntor_client_handshake(&state, msg, keys, keybytes)<0) {
+  if (onion_skin_ntor_client_handshake(&state, msg, keys, keybytes, NULL)<0) {
     fprintf(stderr, "handshake failed");
     result = 2;
     goto done;
@@ -156,7 +153,10 @@ main(int argc, char **argv)
   if (argc < 2) {
     fprintf(stderr, "I need arguments. Read source for more info.\n");
     return 1;
-  } else if (!strcmp(argv[1], "client1")) {
+  }
+
+  curve25519_init();
+  if (!strcmp(argv[1], "client1")) {
     return client1(argc, argv);
   } else if (!strcmp(argv[1], "server1")) {
     return server1(argc, argv);

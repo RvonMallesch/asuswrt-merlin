@@ -25,8 +25,8 @@
 	background-color:#2B373B;
 	display:block;
 	margin-left: 23%;
-	margin-top: 20px;
-	width:425px;
+	top: 15%;
+	width:495px;
 	height:auto;
 	box-shadow: 3px 3px 10px #000;
 	display: none;
@@ -65,19 +65,18 @@
 	border-collapse: collapse;
 }
 #custom_image div{
-	background-image:url('/images/New_ui/networkmap/client-list.png');
+	background-image:url('/images/New_ui/networkmap/client-list.svg');
+	background-image:url('/images/New_ui/networkmap/client.png') \9;
 	background-repeat:no-repeat;
-	height:55px;
+	height:60px;
 	width:60px;
 	cursor:pointer;
-	background-position:-21px 0%;
+	background-size: 900%;
+	background-color: #788D94;
+	border-radius: 10px;
 }
 #custom_image div:hover{
-	background-image:url('/images/New_ui/networkmap/client-listover.png');
-}
-#custom_image td:hover{
-	border-radius: 7px;
-	background-color:#84C1FF;
+	background-color: #FFFFFF;
 }
 .imgClientIcon{
 	position: relative; 
@@ -92,15 +91,16 @@
 <script type="text/javascript" src="/state.js"></script>
 <script type="text/javascript" src="/general.js"></script>
 <script type="text/javascript" src="/popup.js"></script>
-<script type="text/javascript" src="/disk_functions.js"></script>
 <script type="text/javascript" src="/help.js"></script>
 <script type="text/javascript" src="/validator.js"></script>
 <script language="JavaScript" type="text/javascript" src="/client_function.js"></script>
 <script language="JavaScript" type="text/javascript" src="/js/jquery.js"></script>
 <script type="text/javascript" src="/switcherplugin/jquery.iphone-switch.js"></script>
+<script type="text/javascript" src="/disk_functions.js"></script>
 <script language="JavaScript" type="text/javascript" src="/form.js"></script>
 <script>
-	
+//if(usb_support) addNewScript("/disk_functions.js");
+
 var userIconBase64 = "NoIcon";
 var verderIcon = "";
 var userIconHideFlag = false;
@@ -155,10 +155,12 @@ var first_wanlink_ipaddr = first_wanlink_ipaddr();
 var secondary_wanlink_status = secondary_wanlink_statusstr();
 var secondary_wanlink_ipaddr = secondary_wanlink_ipaddr();
 
-if(wans_dualwan_orig.search(" ") == -1)
-	var wans_flag = 0;
-else
-	var wans_flag = (wans_dualwan_orig.search("none") == -1) ? 1:0;
+if(gobi_support) {
+	var dualwan_first_if = wans_dualwan_array[0];
+	var dualwan_second_if = wans_dualwan_array[1];
+}
+
+var wans_flag = (wans_dualwan_orig.search("none") != -1 || !parent.dualWAN_support) ? 0 : 1;
 
 // USB function
 var currentUsbPort = new Number();
@@ -174,7 +176,10 @@ window.onresize = function() {
 	}
 } 
 
-function initial(){   
+function initial(){
+	var autodet_state = '<% nvram_get("autodet_state"); %>';
+	var autodet_auxstate = '<% nvram_get("autodet_auxstate"); %>';	
+	var wan_proto = '<% nvram_get("wan_proto"); %>';
 	show_menu();
 	var isIE6 = navigator.userAgent.search("MSIE 6") > -1;
 	if(isIE6)
@@ -182,6 +187,14 @@ function initial(){
 	
 	if(dualWAN_support && sw_mode == 1){
 		check_dualwan(wans_flag);
+	}
+
+	if(concurrent_pap){
+		check_dualwan(pap_flag);
+		document.getElementById("first_wan_title").style.display = "none";
+		document.getElementById("primary_pap_concurrent").style.display = "";
+		document.getElementById("second_wan_title").style.display = "none";
+		document.getElementById("secondary_pap_concurrent").style.display = "";		
 	}
 	
 	if(sw_mode == 4){
@@ -209,49 +222,54 @@ function initial(){
 		document.getElementById("clientspace_td").style.display = "none";
 		document.getElementById("usb_td").style.display = "none";
 	}
+	else{
+		for(var i=0; i<usbPortMax; i++){
+			var newDisk = function(){
+				this.usbPath = "";
+				this.deviceType = "";
+			}
 
-	for(var i=0; i<usbPortMax; i++){
-		var tmpDisk = new newDisk();
-		tmpDisk.usbPath = i+1;
-		show_USBDevice(tmpDisk);
-		document.getElementById("usbPathContainer_"+parseInt(i+1)).style.display = "";
+			var tmpDisk = new newDisk();
+			tmpDisk.usbPath = i+1;
+			show_USBDevice(tmpDisk);
+			document.getElementById("usbPathContainer_"+parseInt(i+1)).style.visibility = "visible";;
+		}
+		
+		//if(document.getElementById('usbPathContainer_2').style.display == "none")
+			//document.getElementById('space_block').style.display = "";
+		
+		check_usb3();
+	 	require(['/require/modules/diskList.js'], function(diskList){
+	 		var usbDevicesList = diskList.list();
+			for(var i=0; i<usbDevicesList.length; i++){
+			  var new_option = new Option(usbDevicesList[i].deviceName, usbDevicesList[i].deviceIndex);
+				document.getElementById('deviceOption_'+usbDevicesList[i].usbPath).options.add(new_option);
+				document.getElementById('deviceOption_'+usbDevicesList[i].usbPath).style.display = "";
+
+				if(typeof usbPorts[usbDevicesList[i].usbPath-1].deviceType == "undefined" || usbPorts[usbDevicesList[i].usbPath-1].deviceType == "")
+					show_USBDevice(usbDevicesList[i]);
+			}
+
+			for(var usbIndex = 1; usbIndex <= usbPortMax; usbIndex += 1) {
+				var usb_mount_count = document.getElementById("deviceOption_" + usbIndex).length;
+				if( usb_mount_count >= 2) {
+					var divUsbMountCount = document.createElement("div");
+					divUsbMountCount.className = "usb_count_circle";
+					divUsbMountCount.innerHTML = usb_mount_count;
+					document.getElementById("deviceText_" + usbIndex).appendChild(divUsbMountCount);
+
+					$(".usb_count_circle").mouseover(function(){
+						return overlib(this.innerHTML + " usb devices are plugged in <% nvram_get("productid"); %> through this port.");
+					});
+
+					$(".usb_count_circle").mouseout(function(){
+						nd();
+					});
+				}
+			}
+		});
 	}
 	
-	if(document.getElementById('usbPathContainer_2').style.display == "none")
-		document.getElementById('space_block').style.display = "";
-	
-	check_usb3();
-
- 	require(['/require/modules/diskList.js'], function(diskList){
- 		var usbDevicesList = diskList.list();
-		for(var i=0; i<usbDevicesList.length; i++){
-		  var new_option = new Option(usbDevicesList[i].deviceName, usbDevicesList[i].deviceIndex);
-			document.getElementById('deviceOption_'+usbDevicesList[i].usbPath).options.add(new_option);
-			document.getElementById('deviceOption_'+usbDevicesList[i].usbPath).style.display = "";
-
-			if(typeof usbPorts[usbDevicesList[i].usbPath-1].deviceType == "undefined" || usbPorts[usbDevicesList[i].usbPath-1].deviceType == "")
-				show_USBDevice(usbDevicesList[i]);
-		}
-
-		for(var usbIndex = 1; usbIndex <= usbPortMax; usbIndex += 1) {
-			var usb_mount_count = document.getElementById("deviceOption_" + usbIndex).length;
-			if( usb_mount_count >= 2) {
-				var divUsbMountCount = document.createElement("div");
-				divUsbMountCount.className = "usb_count_circle";
-				divUsbMountCount.innerHTML = usb_mount_count;
-				document.getElementById("deviceText_" + usbIndex).appendChild(divUsbMountCount);
-
-				$(".usb_count_circle").mouseover(function(){
-					return overlib(this.innerHTML + " usb devices are plugged in <% nvram_get("productid"); %> through this port.");
-				});
-
-				$(".usb_count_circle").mouseout(function(){
-					nd();
-				});
-			}
-		}
-	});
-
 	showMapWANStatus(sw_mode);
 
 	if(sw_mode != "1"){
@@ -262,6 +280,10 @@ function initial(){
 		if(sw_mode == 2 || sw_mode == 4){
 			document.getElementById('wlc_band_div').style.display = "";
 			document.getElementById('dataRate_div').style.display = "";
+			if(Rawifi_support || Qcawifi_support)
+				document.getElementById('rssi_div').style.display = "none";
+			else
+				document.getElementById('rssi_div').style.display = "";
 			if(wlc_band == 0)
 				document.getElementById('wlc_band_status').innerHTML = "2.4GHz"; 
 			else	
@@ -282,11 +304,10 @@ function initial(){
 		customize_NM_table(NM_table_img);
 		document.getElementById("bgimg").options[NM_table_img[4]].selected = 1;
 	}
-	update_wan_status();
 
 	if(smart_connect_support){
 		if(localAP_support && sw_mode != 2){
-			if(based_modelid == "RT-AC5300" && '<% nvram_get("smart_connect_x"); %>' !=0)
+			if((based_modelid == "RT-AC5300" || based_modelid == "RT-AC5300R") && '<% nvram_get("smart_connect_x"); %>' !=0)
 			show_smart_connect_status();
 		}
 	}
@@ -297,12 +318,47 @@ function initial(){
 	document.list_form.MULTIFILTER_MAC.value = MULTIFILTER_MAC_orig;
 	document.list_form.MULTIFILTER_DEVICENAME.value = MULTIFILTER_DEVICENAME_orig;
 	document.list_form.MULTIFILTER_MACFILTER_DAYTIME.value = MULTIFILTER_MACFILTER_DAYTIME_orig;
-	setClientListOUI();
 	updateClientsCount();
 
 	if(isSwMode("mb")){
 		document.getElementById("wlSecurityContext").style.display = "none";
 		document.getElementById("mbModeContext").style.display = "";
+	}
+
+	if(disnwmd_support) 
+		$("#networkmap_switch").show();
+
+	if(wans_flag && gobi_support){
+		var eLAN_str = "<#Ethernet_wan#>:".replace(/WAN/, "LAN");
+		if(dualwan_first_if == 'wan')
+			document.getElementById("first_wan_title").innerHTML = "<#Ethernet_wan#>:";
+		else if(dualwan_first_if == 'lan')
+			document.getElementById("first_wan_title").innerHTML = eLAN_str;
+		else if(dualwan_first_if == 'usb'){
+			document.getElementById("iconInternet_primary").style.background = "url('images/New_ui/networkmap/Mobile-Broadband.png') no-repeat 0% 0%";
+			if(gobi_support)
+				document.getElementById("first_wan_title").innerHTML = "<#Mobile_title#>:";
+			else
+				document.getElementById("first_wan_title").innerHTML = "<#menu5_4_4#>:";
+		}
+
+		if(dualwan_second_if == 'wan')
+			document.getElementById("second_wan_title").innerHTML = "<#Ethernet_wan#>:";
+		else if(dualwan_second_if == 'lan')
+			document.getElementById("second_wan_title").innerHTML = eLAN_str;		
+		else if(dualwan_second_if == 'usb'){
+			document.getElementById("iconInternet_secondary").style.background = "url('images/New_ui/networkmap/Mobile-Broadband.png') no-repeat 0% 0%";
+			if(gobi_support)
+				document.getElementById("second_wan_title").innerHTML = "<#Mobile_title#>:";
+			else
+				document.getElementById("second_wan_title").innerHTML = "<#menu5_4_4#>:";
+		}
+	}
+
+	if(is_TW_sku && document.referrer.indexOf("QIS") != -1){
+		if((autodet_state == 6 || autodet_auxstate == 6) && wan_proto == "dhcp"){
+			notification.notiClick();
+		}
 	}
 }
 
@@ -321,8 +377,19 @@ function show_smart_connect_status(){
 
 function show_ddns_status(){
 	var ddns_enable = '<% nvram_get("ddns_enable_x"); %>';
-	var ddns_server_x = '<% nvram_get("ddns_server_x");%>';
-	var ddnsName = decodeURIComponent('<% nvram_char_to_ascii("", "ddns_hostname_x"); %>');
+	var ddns_server_x = '<% nvram_get("ddns_server_x"); %>';
+	var ddnsName;
+	var ddns_hostname_x = '<% nvram_get("ddns_hostname_x"); %>';
+	var ddns_username_x = '<% nvram_get("ddns_username_x"); %>';
+
+	switch (ddns_server_x){
+		case "WWW.NAMECHEAP.COM":
+			ddnsName = ddns_hostname_x + "." + ddns_username_x;
+			break;
+		
+		default:
+			ddnsName = ddns_hostname_x; 
+	}
 
 	document.getElementById("ddns_fail_hint").className = "notificationoff";
 	if( ddns_enable == '0')
@@ -592,11 +659,51 @@ function clickEvent(obj){
 		document.getElementById("statusframe").src = "/device-map/internet.asp";
 
 		if(parent.wans_flag){
-			if(obj.id.indexOf("primary") != -1)
-				stitle = "Primary WAN status"
-			else
-				stitle = "Secondary WAN status"
+			if(gobi_support) {
+				var eLAN_str = "<#Ethernet_wan#>".replace(/WAN/, "LAN");
+				if(obj.id.indexOf("primary") != -1){
+					if(dualwan_first_if == "wan")
+						stitle = "<#Ethernet_wan#> Status";
+					else if(dualwan_first_if == "lan")
+						stitle = eLAN_str+" Status";
+					else if(dualwan_first_if == "usb"){
+						if(gobi_support)
+							stitle = "<#Mobile_title#> Status";
+						else
+							stitle = "<#menu5_4_4#> Status";
+					}
+					else	
+						stitle = "Primary WAN status";
+				}
+				else{
+					if(dualwan_second_if == "wan")
+						stitle = "<#Ethernet_wan#> Status";
+					else if(dualwan_second_if == "lan")
+						stitle = eLAN_str+" Status";
+					else if(dualwan_second_if == "usb"){
+						if(gobi_support)
+							stitle = "<#Mobile_title#> Status";
+						else
+							stitle = "<#menu5_4_4#> Status";
+					}
+					else
+						stitle = "Secondary WAN status";
+				}
+			}
+			else {
+				if(obj.id.indexOf("primary") != -1)
+					stitle = "Primary WAN status";
+				else
+					stitle = "Secondary WAN status";
+			}
 		}
+
+		if(obj.id.indexOf("Internet_secondary") > 0){
+			pap_click_flag = 1;
+		}
+		else{
+			pap_click_flag = 0;
+		}		
 	}
 	else if(obj.id.indexOf("Router") > 0){
 		icon = "iconRouter";
@@ -654,7 +761,10 @@ function clickEvent(obj){
 		else{
 			document.getElementById("statusframe").src = "/device-map/disk.asp";	
 			obj.style.backgroundPosition = '0% -103px';
-		}		
+		}
+	}
+	else if(((obj.id.indexOf("secondary") > 0 && dualwan_second_if == 'usb') || (obj.id.indexOf("primary") > 0 && dualwan_first_if == 'usb')) && gobi_support) {
+		obj.style.backgroundPosition = '0% 100%';
 	}
 	else{
 		obj.style.backgroundPosition = '0% 101%';
@@ -796,8 +906,9 @@ function change_wan_unit(wan_unit_flag){
 }
 
 function show_ddns_fail_hint() {
+	var ddns_return_code = '<% nvram_get_ddns("LANHostConfig","ddns_return_code"); %>';
 	var str="";
-	if( !((link_status == "2" && link_auxstatus == "0") || (link_status == "2" && link_auxstatus == "2")) )
+	if(sw_mode != 3 && document.getElementById("connect_status").className == "connectstatusoff")
 		str = "<#Disconnected#>";
 	else if(ddns_server = 'WWW.ASUS.COM') {
 		var ddnsHint = getDDNSState(ddns_return_code, "<%nvram_get("ddns_hostname_x");%>", "<%nvram_get("ddns_old_name");%>");
@@ -830,108 +941,6 @@ function check_dualwan(flag){
 		document.getElementById('primary_wan_line').style.display = "";
 		document.getElementById('secondary_wan_line').style.display = "";
 		document.getElementById('dual_wan_gap').style.display = "";
-	}
-}
-
-function update_wan_status(e) {
-	if(stopFlag == 1) return false;
-
-	$.ajax({
-		url: '/status.asp',
-		dataType: 'script', 
-
-		error: function(xhr) {
-			setTimeout("update_wan_status();", 3000);
-		},
-		success: function(response) {
-			wanlink_status = wanlink_statusstr();
-			wanlink_ipaddr = wanlink_ipaddr();
-			first_wanlink_status = first_wanlink_statusstr();
-			first_wanlink_ipaddr = first_wanlink_ipaddr();
-			secondary_wanlink_status = secondary_wanlink_statusstr();
-			secondary_wanlink_ipaddr = secondary_wanlink_ipaddr();
-			change_wan_state(first_wanlink_status,secondary_wanlink_status);
-			setTimeout("update_wan_status();", 3000);
-		}
-	});
-}
-
-function change_wan_state(primary_status, secondary_status){
-	if (!dualWAN_support)
-		return true;
-
-	if(wans_mode == "fo" || wans_mode == "fb"){
-		if(wan_unit == 0){
-			if(primary_status == "Disconnected"){
-				document.getElementById('primary_status').innerHTML = "<#Disconnected#>";
-				document.getElementById('primary_line').className = "primary_wan_disconnected";
-			}
-			else{
-				document.getElementById('primary_status').innerHTML = "<#Connected#>";
-				document.getElementById('primary_line').className = "primary_wan_connected";
-			}
-			
-			if(secondary_wanlink_ipaddr != '0.0.0.0' && secondary_status != 'Disconnected')
-				secondary_status = "Standby";
-					
-			if(secondary_status == 'Disconnected'){
-				document.getElementById('seconday_status').innerHTML = "<#Disconnected#>";
-				document.getElementById('secondary_line').className = "secondary_wan_disconnected";
-			}
-			else if(secondary_status == 'Standby'){
-				document.getElementById('seconday_status').innerHTML = "<#Status_Standby#>";
-				document.getElementById('secondary_line').className = "secondary_wan_standby";
-			}
-			else{
-				document.getElementById('seconday_status').innerHTML = "<#Connected#>";
-				document.getElementById('secondary_line').className = "secondary_wan_connected";
-			}
-		}
-		else{	//wan_unit : 1
-			if(first_wanlink_ipaddr != '0.0.0.0' && primary_status != 'Disconnected')
-				primary_status = "Standby";
-
-			if(primary_status == 'Disconnected'){
-				document.getElementById('primary_status').innerHTML = "<#Disconnected#>";
-				document.getElementById('primary_line').className = "primary_wan_disconnected";
-			}
-			else if(primary_status == 'Standby'){
-				document.getElementById('primary_status').innerHTML = "<#Status_Standby#>";
-				document.getElementById('primary_line').className = "primary_wan_standby";
-			}
-			else{
-				document.getElementById('primary_status').innerHTML = "<#Connected#>";
-				document.getElementById('primary_line').className = "primary_wan_connected";
-			}
-			
-			if(secondary_status == "Disconnected"){
-				document.getElementById('seconday_status').innerHTML = "<#Disconnected#>";
-				document.getElementById('secondary_line').className = "secondary_wan_disconnected";
-			}
-			else{
-				document.getElementById('seconday_status').innerHTML = "<#Connected#>";
-				document.getElementById('secondary_line').className = "secondary_wan_connected";
-			}
-		}
-	}
-	else{	//lb
-		if(primary_status == "Disconnected"){
-			document.getElementById('primary_status').innerHTML = "<#Disconnected#>";
-			document.getElementById('primary_line').className = "primary_wan_disconnected";
-		}
-		else{
-			document.getElementById('primary_status').innerHTML = "<#Connected#>";
-			document.getElementById('primary_line').className = "primary_wan_connected";
-		}
-		
-		if(secondary_status == "Disconnected"){
-			document.getElementById('seconday_status').innerHTML = "<#Disconnected#>";
-			document.getElementById('secondary_line').className = "secondary_wan_disconnected";
-		}
-		else{
-			document.getElementById('seconday_status').innerHTML = "<#Connected#>";
-			document.getElementById('secondary_line').className = "secondary_wan_connected";
-		}
 	}
 }
 
@@ -1233,6 +1242,8 @@ function edit_delete(){
 }
 
 function show_custom_image() {
+	if(top.isIE8) return false;
+
 	var display_state = document.getElementById("custom_image").style.display;
 	if(display_state == "none") {
 		$("#custom_image").slideDown("slow");
@@ -1249,14 +1260,18 @@ function select_image(type){
 	document.getElementById("client_image").style.display = "none";
 	document.getElementById("canvasUserIcon").style.display = "none";
 	var icon_type = type;
-	if(type == "type0" || type == "type6") {
+	if(type == "type0") {
 		icon_type = "type0_viewMode";
 	}
+
+	document.getElementById('client_image').style.backgroundSize = "";
 	document.getElementById('client_image').className = "clientIcon_no_hover " + icon_type;
-	if(verderIcon != "" && (type == "type0" || type == "type6")) {
+
+	if(verderIcon != "" && type == "type0") {
 		var venderIconClassName = getVenderIconClassName(verderIcon.toLowerCase());
-		if(venderIconClassName != "") {
-			document.getElementById('client_image').className = "venderIcon_no_hover " + venderIconClassName
+		if(venderIconClassName != "" && !downsize_4m_support) {
+			document.getElementById('client_image').className = "venderIcon_no_hover " + venderIconClassName;
+			document.getElementById('client_image').style.backgroundSize = "180%";
 		}
 	}
 
@@ -1301,12 +1316,14 @@ function oui_query(mac){
 		success: function(response) {
 			if(document.getElementById("edit_client_block").style.display == "none") return true;
 			if(response.search("Sorry!") == -1) {
-				var retData = response.split("pre")[1].split("(hex)")[1].split(queryStr)[0].split("&lt;/");
-				document.getElementById('manufacturer_field').value = retData[0].trim();
-				document.getElementById('manufacturer_field').title = "";
-				if(retData[0].trim().length > 28) {
-					document.getElementById('manufacturer_field').value = retData[0].trim().substring(0, 26) + "..";
-					document.getElementById('manufacturer_field').title = retData[0].trim();
+				if(response.search(queryStr) != -1) {
+					var retData = response.split("pre")[1].split("(hex)")[1].split(queryStr)[0].split("<b>");
+					document.getElementById('manufacturer_field').value = retData[0].trim();
+					document.getElementById('manufacturer_field').title = "";
+					if(retData[0].trim().length > 38) {
+						document.getElementById('manufacturer_field').value = retData[0].trim().substring(0, 36) + "..";
+						document.getElementById('manufacturer_field').title = retData[0].trim();
+					}
 				}
 			}
 		}
@@ -1314,6 +1331,11 @@ function oui_query(mac){
 }
 
 function popupEditBlock(clientObj){
+	if(downsize_4m_support) {
+		document.getElementById("changeClientIconControl").style.display = "none";
+		document.getElementById("divDropClientImage").onclick = null;
+	}
+
 	if(bwdpi_support) {
 		document.getElementById("time_scheduling_title").innerHTML = "<#Time_Scheduling#>";
 	}
@@ -1453,7 +1475,7 @@ function popupEditBlock(clientObj){
 			}
 		}
 		document.getElementById('macaddr_field').value = clientObj.mac;
-		var deviceTitle = (clientObj.dpiDevice == "") ? clientObj.dpiVender : clientObj.dpiDevice;
+		var deviceTitle = (clientObj.dpiDevice == "") ? clientObj.vendor : clientObj.dpiDevice;
 		if(deviceTitle == undefined || deviceTitle == "") {
 			document.getElementById('manufacturer_field').value = "Loading manufacturer..";
 			setTimeout(function(){
@@ -1465,8 +1487,8 @@ function popupEditBlock(clientObj){
 		else {
 			document.getElementById('manufacturer_field').value = deviceTitle;
 			document.getElementById('manufacturer_field').title = "";
-			if(deviceTitle.length > 28) {
-				document.getElementById('manufacturer_field').value = deviceTitle.substring(0, 26) + "..";
+			if(deviceTitle.length > 38) {
+				document.getElementById('manufacturer_field').value = deviceTitle.substring(0, 36) + "..";
 				document.getElementById('manufacturer_field').title = deviceTitle;
 			}
 		}
@@ -1580,13 +1602,13 @@ function popupEditBlock(clientObj){
 				break;
 		}
 
-		verderIcon = clientObj.dpiVender;
+		verderIcon = clientObj.vendor;
 
 		select_image("type" + parseInt(clientObj.type));
 
 		//setting user upload icon attribute start.
 		//1.check rc_support
-		if(usericon_support) {
+		if(usericon_support && !downsize_4m_support) {
 			//2.check browswer support File Reader and Canvas or not.
 			if(isSupportFileReader() && isSupportCanvas()) {
 				document.getElementById("divUserIcon").style.display = "";
@@ -1660,10 +1682,15 @@ function popupEditBlock(clientObj){
 			setTimeout( function() {userIconHideFlag = false;}, 1000);
 		}
 	});
+
+	if(top.isIE8){
+		document.getElementById('client_image').style.backgroundPosition = "50% -15% !important";
+		document.getElementById('client_image').className = "clientIconIE8HACK";
+	}
 }
 
 function check_usb3(){
-	if(based_modelid == "DSL-AC68U" || based_modelid == "RT-AC3200" || based_modelid == "RT-AC87U" || based_modelid == "RT-AC69U" || based_modelid == "RT-AC68U" || based_modelid == "RT-AC68U_V2" || based_modelid == "RT-AC56S" || based_modelid == "RT-AC56U" || based_modelid == "RT-AC55U" || based_modelid == "RT-AC55UHP" || based_modelid == "RT-N18U" || based_modelid == "RT-AC88U" || based_modelid == "RT-AC3100" || based_modelid == "RT-AC5300"){
+	if(based_modelid == "DSL-AC68U" || based_modelid == "RT-AC3200" || based_modelid == "RT-AC87U" || based_modelid == "RT-AC68U" || based_modelid == "RT-AC68A" || based_modelid == "RT-AC56S" || based_modelid == "RT-AC56U" || based_modelid == "RT-AC55U" || based_modelid == "RT-AC55UHP" || based_modelid == "RT-N18U" || based_modelid == "RT-AC88U" || based_modelid == "RT-AC3100" || based_modelid == "RT-AC5300" || based_modelid == "RT-AC5300R"){
 		document.getElementById('usb1_image').src = "images/New_ui/networkmap/USB3.png";
 	}
 	else if(based_modelid == "RT-N65U"){
@@ -1901,6 +1928,9 @@ function setDefaultIcon() {
 	var mac = document.getElementById("macaddr_field").value;
 	select_image("type" + parseInt(clientList[mac].defaultType));
 }
+function closeClientDetailView() {
+	edit_cancel();
+}
 </script>
 </head>
 
@@ -1997,6 +2027,15 @@ function setDefaultIcon() {
 	<input type="hidden" name="next_page" value="httpd_check.xml">
 	<input type="hidden" name="client_info_tmp" value="">	
 </form>
+<!-- stop networkmapd -->
+<form method="post" name="stopNetworkmapd" action="/start_apply.htm" target="hidden_frame">
+	<input type="hidden" name="action_mode" value="apply">
+	<input type="hidden" name="action_script" value="restart_networkmap">
+	<input type="hidden" name="action_wait" value="2">
+	<input type="hidden" name="current_page" value="index.asp">
+	<input type="hidden" name="next_page" value="index.asp">
+	<input type="hidden" name="networkmap_enable" value="<% nvram_get("networkmap_enable"); %>">
+</form>
 
 <div id="edit_usericon_block" class="contentM_usericon">
 	<table width="95%" border="1" align="center" cellpadding="4" cellspacing="0" class="FormTable_table" style="margin-top:8px;">
@@ -2022,7 +2061,7 @@ function setDefaultIcon() {
 <div id="edit_client_block" class="contentM_qis">
 	<table class="QISform_wireless" border=0 align="center" cellpadding="5" cellspacing="0" style="width:100%;">
 		<tr>
-			<td colspan="2">
+			<td colspan="3">
 				<div id="divClientState" class="clientState">
 					<span id="client_ipMethod" class="ipMethodTag " ></span>
 					<span id="client_login" class="ipMethodTag " ></span>
@@ -2034,19 +2073,33 @@ function setDefaultIcon() {
 			</td>
 		</tr>
 		<tr>
-			<td colspan="2">
+			<td colspan="3">
 				<div class="clientList_line"></div>
 			</td>
 		</tr>
 		<tr>
-			<td style="text-align:center;vertical-align:top;">
+			<td style="text-align:center;vertical-align:top;width:85px;">
 				<div id="divDropClientImage" class="client_preview_icon" title="Change client icon" onclick="show_custom_image();">
-					<div id="client_image" style="width:85px;height:85px;background-size:170%;margin:0 auto;"></div>
+					<div id="client_image" style="width:85px;height:85px;margin:0 auto;"></div>
 					<canvas id="canvasUserIcon" class="client_canvasUserIcon" width="85px" height="85px"></canvas>
 				</div>
-				<div class="changeClientIcon">
-					<span title="Change to default client icon" onclick="setDefaultIcon();">Default</span><!--untranslated-->
-					<span id="changeIconTitle" title="Change client icon" style="margin-left:10px;" onclick="show_custom_image();">Change</span><!--untranslated-->
+				<div id="changeClientIconControl" class="changeClientIcon">
+					<span title="Change to default client icon" class="IE8HACK" onclick="setDefaultIcon();">Default</span><!--untranslated-->
+					<span id="changeIconTitle" class="IE8HACK" title="Change client icon" style="margin-left:10px;" onclick="show_custom_image();">Change</span><!--untranslated-->
+				</div>
+			</td>
+			<td style="vertical-align:top;text-align:center;">
+				<div class="clientTitle">
+					Name
+				</div>
+				<div  class="clientTitle" style="margin-top:10px;">
+					IP
+				</div>
+				<div  class="clientTitle" style="margin-top:10px;">
+					MAC
+				</div>
+				<div  class="clientTitle" style="margin-top:10px;">
+					Device
 				</div>
 			</td>
 			<td style="vertical-align:top;width:280px;">
@@ -2069,76 +2122,109 @@ function setDefaultIcon() {
 		</tr>
 
 		<tr>
-			<td colspan="2">
+			<td colspan="3">
 				<div id="custom_image" style="display:none;">
 					<table border="1" align="center" cellpadding="4" cellspacing="0" style="width:100%">
 						<tr>
 							<td>
-								<div class="type1" onclick="select_image(this.className);"></div>
+								<div class="type1" onclick="select_image(this.className);" title="Windows device"></div><!--untranslated-->
 							</td>
 							<td>
-								<div class="type2" onclick="select_image(this.className);"></div>
+								<div class="type2" onclick="select_image(this.className);" title="Router"></div><!--untranslated-->
 							</td>
 							<td>
-								<div class="type4" onclick="select_image(this.className);"></div>
+								<div class="type4" onclick="select_image(this.className);" title="NAS/Server"></div><!--untranslated-->
 							</td>
 							<td>
-								<div class="type5" onclick="select_image(this.className);"></div>
+								<div class="type5" onclick="select_image(this.className);" title="IP Cam"></div><!--untranslated-->
 							</td>
 							<td>
-								<div class="type7" onclick="select_image(this.className);"></div>
+								<div class="type6" onclick="select_image(this.className);" title="Macbook"></div><!--untranslated-->
 							</td>
 							<td>
-								<div class="type8" onclick="select_image(this.className);"></div>
+								<div class="type7" onclick="select_image(this.className);" title="Game Console"></div><!--untranslated-->
+							</td>
+							<td>
+								<div class="type9" onclick="select_image(this.className);" title="Android Phone"></div><!--untranslated-->
 							</td>
 						</tr>
 						<tr>
 							<td>
-								<div class="type9" onclick="select_image(this.className);"></div>
+								<div class="type10" onclick="select_image(this.className);" title="iPhone"></div><!--untranslated-->
 							</td>
 							<td>
-								<div class="type10" onclick="select_image(this.className);"></div>
+								<div class="type11" onclick="select_image(this.className);" title="Apple TV"></div><!--untranslated-->
 							</td>
 							<td>
-								<div class="type11" onclick="select_image(this.className);"></div>
+								<div class="type12" onclick="select_image(this.className);" title="Set-top Box"></div><!--untranslated-->
 							</td>
 							<td>
-								<div class="type12" onclick="select_image(this.className);"></div>
+								<div class="type14" onclick="select_image(this.className);" title="iMac"></div><!--untranslated-->
 							</td>
 							<td>
-								<div class="type13" onclick="select_image(this.className);"></div>
+								<div class="type15" onclick="select_image(this.className);" title="ROG"></div><!--untranslated-->
 							</td>
 							<td>
-								<div class="type14" onclick="select_image(this.className);"></div>
+								<div class="type18" onclick="select_image(this.className);" title="Printer"></div><!--untranslated-->
+							</td>
+							<td>
+								<div class="type19" onclick="select_image(this.className);" title="Windows Phone"></div><!--untranslated-->
 							</td>
 						</tr>
 						<tr>
 							<td>
-								<div class="type15" onclick="select_image(this.className);"></div>
+								<div class="type20" onclick="select_image(this.className);" title="Android Tablet"></div><!--untranslated-->
 							</td>
 							<td>
-								<div class="type16" onclick="select_image(this.className);"></div>
+								<div class="type21" onclick="select_image(this.className);" title="iPad"></div><!--untranslated-->
 							</td>
 							<td>
-								<div class="type17" onclick="select_image(this.className);"></div>
+								<div class="type22" onclick="select_image(this.className);" title="Linux Device"></div><!--untranslated-->
 							</td>
 							<td>
-								<div class="type18" onclick="select_image(this.className);"></div>
+								<div class="type23" onclick="select_image(this.className);" title="Smart TV"></div><!--untranslated-->
 							</td>
-							<td class="client_icon_list_td">
+							<td>
+								<div class="type24" onclick="select_image(this.className);" title="Repeater"></div><!--untranslated-->
+							</td>
+							<td>
+								<div class="type25" onclick="select_image(this.className);" title="Kindle"></div><!--untranslated-->
+							</td>
+							<td>
+								<div class="type26" onclick="select_image(this.className);" title="Scanner"></div><!--untranslated-->
+							</td>
+						</tr>
+						<tr>
+							<td>
+								<div class="type27" onclick="select_image(this.className);" title="Chromecast"></div><!--untranslated-->
+							</td>
+							<td>
+								<div class="type28" onclick="select_image(this.className);" title="ASUS smartphone"></div><!--untranslated-->
+							</td>
+							<td>
+								<div class="type29" onclick="select_image(this.className);" title="ASUS Pad"></div><!--untranslated-->
+							</td>
+							<td>
+								<div class="type30" onclick="select_image(this.className);" title="Windows"></div><!--untranslated-->
+							</td>
+							<td>
+								<div class="type31" onclick="select_image(this.className);" title="Android"></div><!--untranslated-->
+							</td>
+							<td>
+								<div class="type32" onclick="select_image(this.className);" title="Mac OS"></div><!--untranslated-->
+							</td>
+							<td>
 								<div id="divUserIcon" class="client_upload_div" style="display:none;">+
 									<input type="file" name="uploadIcon" id="uploadIcon" class="client_upload_file" onchange="previewImage(this);" title="Upload client icon" /><!--untranslated-->
 								</div>
 							</td>
-							<td>
-							</td>
-						</tr>	
+						</tr>
 					</table>
 		 		</div>	
 			</td>
 		</tr>
 		<tr id="tr_adv_setting">
-			<td colspan="2">
+			<td colspan="3">
 				<div class="clientList_line"></div>
 				<div style="height:32px;width:100%;margin:5px 0;">
 					<div style="width:65%;float:left;line-height:32px;">
@@ -2165,7 +2251,7 @@ function setDefaultIcon() {
 			</td>
 		</tr>
 		<tr>
-			<td colspan="2" style="text-align: center;">
+			<td colspan="3" style="text-align: center;">
 				<input class="button_gen" type="button" onclick="edit_delete();" id="deleteBtn" value="<#CTL_del#>" style="display:none;">
 				<input class="button_gen" type="button" id="blockBtn" value="<#Block#>" title="<#block_client#>" style="display:none;">
 				<script>
@@ -2195,6 +2281,7 @@ function setDefaultIcon() {
 						hideEditBlock();
 					}
 				</script>
+				<input class="button_gen" type="button" onclick="closeClientDetailView();" value="<#CTL_Cancel#>">
 				<input id="edit_confirm" class="button_gen" type="button" onclick="edit_confirm();" value="<#CTL_apply#>">
 				<img id="loadingIcon" style="margin-left:5px;display:none;" src="/images/InternetScan.gif">
 			</td>
@@ -2223,23 +2310,31 @@ function setDefaultIcon() {
 				<tr>
 					<td width="40px" rowspan="11" valign="center"></td>
 					<!--== Dual WAN ==-->
-					<td id="primary_wan_icon" width="160px;" height="155" align="center" class="NM_radius" valign="middle" bgcolor="#444f53" onclick="showstausframe('Internet_primary');" style="display:none">
+					<td id="primary_wan_icon" width="160px;" align="center" class="NM_radius" valign="middle" bgcolor="#444f53" onclick="showstausframe('Internet_primary');" style="display:none;height:180px">
 						<a href="/device-map/internet.asp" target="statusframe"><div id="iconInternet_primary" onclick="clickEvent(this);"></div></a>
-						<div><#dualwan_primary#>:</div>
-						<div><strong id="primary_status"></strong></div>
+						<div id="first_wan_title"><#dualwan_primary#>:</div>
+						<div id="primary_pap_concurrent" style="display:none">
+							<div style="padding: 3px 0">2.4 GHz Parent-AP</div>
+							<div id="speed_info_primary">Link Rate:</div>
+						</div>
+						<div style="padding:5px"><strong id="primary_status"></strong></div>
 					</td>
 					<td id="dual_wan_gap" width="40px" style="display:none">
 					</td>
-					<td id="secondary_wan_icon" width="160px;" height="155" align="center" class="NM_radius" valign="middle" bgcolor="#444f53" onclick="showstausframe('Internet_secondary');" style="display:none">
+					<td id="secondary_wan_icon" width="160px;" align="center" class="NM_radius" valign="middle" bgcolor="#444f53" onclick="showstausframe('Internet_secondary');" style="display:none;height:180px">
 						<a href="/device-map/internet.asp" target="statusframe"><div id="iconInternet_secondary" onclick="clickEvent(this);"></div></a>
-						<div><#dualwan_secondary#>:</div>
-						<div><strong id="seconday_status"></strong></div>
+						<div id="second_wan_title"><#dualwan_secondary#>:</div>
+						<div id="secondary_pap_concurrent" style="display:none">
+							<div style="padding: 3px 0">5 GHz Parent-AP</div>
+							<div id="speed_info_secondary">Link Rate:</div>
+						</div>
+						<div style="padding:5px"><strong id="secondary_status"></strong></div>
 					</td>
 					<!--== single WAN ==-->
-					<td id="single_wan_icon" height="115" align="right" class="NM_radius_left" valign="middle" bgcolor="#444f53" onclick="showstausframe('Internet');" >
+					<td id="single_wan_icon" align="right" class="NM_radius_left" valign="middle" bgcolor="#444f53" onclick="showstausframe('Internet');">
 						<a href="/device-map/internet.asp" target="statusframe"><div id="iconInternet" onclick="clickEvent(this);"></div></a>
 					</td>
-					<td id="single_wan_status" colspan="2" valign="middle" bgcolor="#444f53" class="NM_radius_right" onclick="" style="padding:5px;cursor:auto;width:180px;">
+					<td id="single_wan_status" colspan="2" valign="middle" bgcolor="#444f53" class="NM_radius_right" onclick="" style="padding:5px;cursor:auto;width:180px;height:130px">
 						<div>
 							<span id="NM_connect_title" style="font-size:12px;font-family: Verdana, Arial, Helvetica, sans-serif;"><#statusTitle_Internet#>:</span>
 							<br>
@@ -2262,7 +2357,10 @@ function setDefaultIcon() {
 							<span style="font-size:14px;font-family: Verdana, Arial, Helvetica, sans-serif;">Link rate:</span>
 							<strong id="speed_status" class="index_status" style="font-size:14px;"></strong>
 						</div>
-						
+						<div id="rssi_div" style="margin-top:5px;display:none">
+							<span style="font-size:14px;font-family: Verdana, Arial, Helvetica, sans-serif;">RSSI:</span>
+							<strong id="rssi_status" class="index_status" style="font-size:14px;"></strong>
+						</div>
 					</td>
 					<td width="40px" rowspan="11" valign="top">
 						<div class="statusTitle" id="statusTitle_NM">
@@ -2275,19 +2373,19 @@ function setDefaultIcon() {
 				</tr>			
 				<tr>
 					<!--==line of dual wan==-->
-					<td id="primary_wan_line"  height="40px" style="display:none;">
+					<td id="primary_wan_line"  height="35px" style="display:none;">
 						<div id="primary_line" class="primary_wan_connected"></div>
 					</td>
-					<td id="secondary_wan_line" colspan="2" height="40px"  style="display:none;">
+					<td id="secondary_wan_line" colspan="2" height="35px"  style="display:none;">
 						<div id="secondary_line" class="secondary_wan_connected"></div>
 					</td>
 					<!--==line of single wan==-->
-					<td id="single_wan_line" colspan="3" align="center" height="19px">
+					<td id="single_wan_line" colspan="3" align="center" height="35px">
 						<div id="single_wan" class="single_wan_connected"></div>
 					</td>
 				</tr>			
 				<tr>
-					<td height="115" align="right" bgcolor="#444f53" class="NM_radius_left" onclick="showstausframe('Router');">
+					<td align="right" bgcolor="#444f53" class="NM_radius_left" onclick="showstausframe('Router');" style="height:150px">
 						<a href="device-map/router.asp" target="statusframe"><div id="iconRouter" onclick="clickEvent(this);"></div></a>
 					</td>
 					<td colspan="2" valign="middle" bgcolor="#444f53" class="NM_radius_right" onclick="showstausframe('Router');">
@@ -2316,19 +2414,39 @@ function setDefaultIcon() {
 
 				</tr>			
 				<tr>
-					<td id="line3_td" colspan="3" align="center" height="52px">
-					<img id="line3_img" src="/images/New_ui/networkmap/line_two.png">
+					<td id="line3_td" colspan="3" align="center" height="35px">
+						<img id="line3_img" src="/images/New_ui/networkmap/line_two.png" style="margin-top:-5px;">
 					</td>
 				</tr>
 				<tr>
-					<td id="clients_td" height="170" width="150" bgcolor="#444f53" align="center" valign="top" class="NM_radius" style="padding-bottom:15px;">
+					<td id="clients_td" width="150" bgcolor="#444f53" align="center" valign="top" class="NM_radius" style="padding-bottom:15px;">
 						<div id="clientsContainer" onclick="showstausframe('Client');">
 							<a id="clientStatusLink" href="device-map/clients.asp" target="statusframe">
 							<div id="iconClient" style="margin-top:20px;" onclick="clickEvent(this);"></div>
 							</a>
 							<div class="clients" id="clientNumber" style="cursor:pointer;"></div>
 						</div>
+
 						<input type="button" class="button_gen" value="View List" style="margin-top:15px;" onClick="pop_clientlist_listview(true)">
+
+						<div id="networkmap_switch" style="display:none">
+							<div align="center" class="left" style="width:94px; cursor:pointer;margin-top:10px" id="networkmap_enable_t"></div>
+							<div class="iphone_switch_container" style="height:32px; width:74px; position: relative; overflow: hidden">
+								<script type="text/javascript">
+									$('#networkmap_enable_t').iphoneSwitch('<% nvram_get("networkmap_enable"); %>',
+										function(){
+											document.stopNetworkmapd.networkmap_enable.value = 1;
+											document.stopNetworkmapd.submit()
+										},
+										function(){
+											document.stopNetworkmapd.networkmap_enable.value = 0;
+											document.stopNetworkmapd.submit()
+										}
+									);
+								</script>			
+							</div>
+						</div>
+
 						<!--div id="" onclick="">
 							<img style="margin-top:15px;width:150px;height:2px" src="/images/New_ui/networkmap/linetwo2.png">
 							<a id="" href="device-map/clients.asp" target="statusframe">
@@ -2341,7 +2459,7 @@ function setDefaultIcon() {
 					<td width="36" rowspan="6" id="clientspace_td"></td>
 
 					<td id="usb_td" width="160" bgcolor="#444f53" align="center" valign="top" class="NM_radius" style="padding-bottom:5px;">
-						<div id="usbPathContainer_1" style="display:none">
+						<div id="usbPathContainer_1" style="visibility:hidden;height:175px">
 							<div style="margin-top:20px;margin-bottom:10px;" id="deviceIcon_1"></div>
 							<div><img id="usb1_image" src="images/New_ui/networkmap/USB2.png"></div>
 							<div style="margin:10px 0px;">
@@ -2350,7 +2468,7 @@ function setDefaultIcon() {
 							</div>
 							<div id="deviceDec_1"></div>
 						</div>
-						<div id="usbPathContainer_2" style="display:none">
+						<div id="usbPathContainer_2" style="visibility:hidden;height:175px">
 							<img style="margin-top:5px;width:150px;height:2px" src="/images/New_ui/networkmap/linetwo2.png">
 							<div style="margin-top:15px;margin-bottom:10px;" id="deviceIcon_2"></div>
 							<div><img id="usb2_image" src="images/New_ui/networkmap/USB2.png"></div>
@@ -2361,9 +2479,6 @@ function setDefaultIcon() {
 							<div id="deviceDec_2"></div>
 						</div>
 					</td>
-				</tr>
-				<tr>
-					<td id="space_block" colspan="3" align="center" height="150px" style="display:none;"></td>
 				</tr>
 			</table>
 		</div>
@@ -2385,46 +2500,46 @@ function setDefaultIcon() {
 	initial();
 
 	document.getElementById('deviceOption_1').onchange = function(){
-	 	require(['/require/modules/diskList.js'], function(diskList){
-	 		diskList.update(function(){
-		 		var usbDevicesList = diskList.list();
-				show_USBDevice(usbDevicesList[document.getElementById('deviceOption_1').value]);
-				setSelectedDiskOrder('iconUSBdisk_1');
+	 	require(['/require/modules/diskList.js?hash=' + Math.random().toString()], function(diskList){
+	 		var usbDevicesList = diskList.list();
+			show_USBDevice(usbDevicesList[document.getElementById('deviceOption_1').value]);
+			setSelectedDiskOrder('iconUSBdisk_1');
 
-				if(usbDevicesList[document.getElementById('deviceOption_1').value].deviceType == "modem")
-					clickEvent(document.getElementById('iconModem_1'));
-				else if(usbDevicesList[document.getElementById('deviceOption_1').value].deviceType == "printer")
-					clickEvent(document.getElementById('iconPrinter_1'));
-				else
-					clickEvent(document.getElementById('iconUSBdisk_1'));
-			});
+			if(usbDevicesList[document.getElementById('deviceOption_1').value].deviceType == "modem")
+				clickEvent(document.getElementById('iconModem_1'));
+			else if(usbDevicesList[document.getElementById('deviceOption_1').value].deviceType == "printer")
+				clickEvent(document.getElementById('iconPrinter_1'));
+			else
+				clickEvent(document.getElementById('iconUSBdisk_1'));
 		});
 	}
 
 	document.getElementById('deviceOption_2').onchange = function(){
-	 	require(['/require/modules/diskList.js'], function(diskList){
-	 		diskList.update(function(){
-		 		var usbDevicesList = diskList.list();
-				show_USBDevice(usbDevicesList[document.getElementById('deviceOption_2').value]);
-				setSelectedDiskOrder('iconUSBdisk_2');
+	 	require(['/require/modules/diskList.js?hash=' + Math.random().toString()], function(diskList){
+	 		var usbDevicesList = diskList.list();
+			show_USBDevice(usbDevicesList[document.getElementById('deviceOption_2').value]);
+			setSelectedDiskOrder('iconUSBdisk_2');
 
-				if(usbDevicesList[document.getElementById('deviceOption_2').value].deviceType == "modem")
-					clickEvent(document.getElementById('iconModem_2'));
-				else if(usbDevicesList[document.getElementById('deviceOption_2').value].deviceType == "printer")
-					clickEvent(document.getElementById('iconPrinter_2'));
-				else
-					clickEvent(document.getElementById('iconUSBdisk_2'));
-			});
+			if(usbDevicesList[document.getElementById('deviceOption_2').value].deviceType == "modem")
+				clickEvent(document.getElementById('iconModem_2'));
+			else if(usbDevicesList[document.getElementById('deviceOption_2').value].deviceType == "printer")
+				clickEvent(document.getElementById('iconPrinter_2'));
+			else
+				clickEvent(document.getElementById('iconUSBdisk_2'));
 		});
 	}
-
+	/* Disable networkmapd update for RP-AC66
 	var manualUpdate = false;
 	if(parseInt((JS_timeObj.getTime()-cookie.get("nwmapRefreshTime"))/60000) > 1){
 		setTimeout(function(){
+			var local_mac = '<% nvram_get("lan_hwaddr"); %>';
+			cookie.set("wireless_list_" + local_mac + "_temp", cookie.get("wireless_list_" + local_mac));
+			cookie.unset("wireless_list_" + local_mac);
 			document.networkmapdRefresh.submit();
 		}, 3500);
 	}
 	cookie.set("nwmapRefreshTime", JS_timeObj.getTime(), 1);
+	*/
 </script>
 </body>
 </html>

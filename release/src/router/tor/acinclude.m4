@@ -2,7 +2,7 @@ dnl Helper macros for Tor configure.ac
 dnl Copyright (c) 2001-2004, Roger Dingledine
 dnl Copyright (c) 2004-2006, Roger Dingledine, Nick Mathewson
 dnl Copyright (c) 2007-2008, Roger Dingledine, Nick Mathewson
-dnl Copyright (c) 2007-2013, The Tor Project, Inc.
+dnl Copyright (c) 2007-2015, The Tor Project, Inc.
 dnl See LICENSE for licensing information
 
 AC_DEFUN([TOR_EXTEND_CODEPATH],
@@ -42,10 +42,11 @@ AC_DEFUN([TOR_DEFINE_CODEPATH],
   AC_SUBST(TOR_LDFLAGS_$2)
 ])
 
-dnl 1:flags
-dnl 2:also try to link (yes: non-empty string)
-dnl   will set yes or no in $tor_can_link_$1 (as modified by AS_VAR_PUSHDEF)
-AC_DEFUN([TOR_CHECK_CFLAGS], [
+dnl 1: flags
+dnl 2: try to link too if this is nonempty.
+dnl 3: what to do on success compiling
+dnl 4: what to do on failure compiling
+AC_DEFUN([TOR_TRY_COMPILE_WITH_CFLAGS], [
   AS_VAR_PUSHDEF([VAR],[tor_cv_cflags_$1])
   AC_CACHE_CHECK([whether the compiler accepts $1], VAR, [
     tor_saved_CFLAGS="$CFLAGS"
@@ -63,9 +64,18 @@ AC_DEFUN([TOR_CHECK_CFLAGS], [
     CFLAGS="$tor_saved_CFLAGS"
   ])
   if test x$VAR = xyes; then
-    CFLAGS="$CFLAGS $1"
+     $3
+  else
+     $4
   fi
   AS_VAR_POPDEF([VAR])
+])
+
+dnl 1:flags
+dnl 2:also try to link (yes: non-empty string)
+dnl   will set yes or no in $tor_can_link_$1 (as modified by AS_VAR_PUSHDEF)
+AC_DEFUN([TOR_CHECK_CFLAGS], [
+  TOR_TRY_COMPILE_WITH_CFLAGS($1, $2, CFLAGS="$CFLAGS $1", true)
 ])
 
 dnl 1:flags
@@ -109,7 +119,7 @@ if test -f /etc/debian_version && test x"$tor_$1_$2_debian" != x; then
   fi 
 fi
 if test -f /etc/fedora-release && test x"$tor_$1_$2_redhat" != x; then
-  AC_WARN([On Fedora Core, you can install$h $1 using "yum install $tor_$1_$2_redhat"])
+  AC_WARN([On Fedora, you can install$h $1 using "dnf install $tor_$1_$2_redhat"])
   if test x"$tor_$1_$2_redhat" != x"$tor_$1_devpkg_redhat"; then 
     AC_WARN([   You will probably need to install $tor_$1_devpkg_redhat too.])
   fi 
@@ -137,7 +147,7 @@ dnl
 AC_DEFUN([TOR_SEARCH_LIBRARY], [
 try$1dir=""
 AC_ARG_WITH($1-dir,
-  [  --with-$1-dir=PATH    Specify path to $1 installation ],
+  AS_HELP_STRING(--with-$1-dir=PATH, [specify path to $1 installation]),
   [
      if test x$withval != xno ; then
         try$1dir="$withval"
@@ -216,6 +226,7 @@ fi
 
 TOR_DEFINE_CODEPATH($tor_cv_library_$1_dir, $1)
 
+cross_compiling="yes"
 if test "$cross_compiling" != yes; then
   AC_CACHE_CHECK([whether we need extra options to link $1],
                  tor_cv_library_$1_linker_option, [
@@ -243,7 +254,7 @@ if test "$cross_compiling" != yes; then
    done
 
    if test "$runnable" = no; then
-    # AC_MSG_ERROR([Found linkable $1 in $tor_cv_library_$1_dir, but it does not seem to run, even with -R. Maybe specify another using --with-$1-dir}])
+     AC_MSG_ERROR([Found linkable $1 in $tor_cv_library_$1_dir, but it does not seem to run, even with -R. Maybe specify another using --with-$1-dir}])
    fi
    LDFLAGS="$orig_LDFLAGS"
   ]) dnl end cache check check for extra options.

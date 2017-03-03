@@ -12,6 +12,7 @@
 <title><#Web_Title#> - TOR Settings</title>
 <link rel="stylesheet" type="text/css" href="index_style.css"> 
 <link rel="stylesheet" type="text/css" href="form_style.css">
+<link rel="stylesheet" type="text/css" href="device-map/device-map.css">
 <script language="JavaScript" type="text/javascript" src="/state.js"></script>
 <script language="JavaScript" type="text/javascript" src="/help.js"></script>
 <script language="JavaScript" type="text/javascript" src="/general.js"></script>
@@ -28,42 +29,6 @@
  	background-color:#CCC;
  	padding:3px 2px 4px 0px;
 }
-#TORMACList{
-	border:1px outset #999;
-	background-color:#576D73;
-	position:absolute;
-	margin-top:24px;
-	margin-left:220px;
-	*margin-left:-150px;
-	width:255px;
-	*width:259px;
-	text-align:left;
-	height:auto;
-	overflow-y:auto;
-	z-index:200;
-	padding: 1px;
-	display:none;
-}
-#TORMACList div{
-	background-color:#576D73;
-	height:20px;
-	line-height:20px;
-	text-decoration:none;
-	padding-left:2px;
-}
-#TORMACList a{
-	background-color:#EFEFEF;
-	color:#FFF;
-	font-size:12px;
-	font-family:Arial, Helvetica, sans-serif;
-	text-decoration:none;	
-}
-
-#TORMACList div:hover, #ClientList_Block a:hover{
-	background-color:#3366FF;
-	color:#FFFFFF;
-	cursor:default;
-}
 </style>
 <script>
 
@@ -75,21 +40,69 @@ function initial(){
 	show_menu();
 	show_tor_settings(Tor_enable);
 	show_tor_redir_list();
-	setTimeout("showLANMacList();", 1000);		
+	setTimeout("showDropdownClientList('setClientMac', 'mac', 'all', 'TORMACList', 'pull_arrow', 'all');", 1000);	
 }
 
 function show_tor_redir_list(){
 	var tor_redir_array = Tor_redir_list_str.split('&#60');
 	var code = "";
 
-	code +='<table width="100%" border="1" cellspacing="0" cellpadding="4" align="center" class="list_table" id="tor_redir_list_table">'; 
+	code +='<table style="margin-top:0px;" width="100%" border="1" cellspacing="0" cellpadding="4" align="center" class="FormTable_table" id="tor_redir_list_table">';
+
 	if(tor_redir_array.length == 1){
 		code +='<tr><td style="color:#FFCC00;"><#IPConnection_VSList_Norule#></td>';
 	}		
 	else{
-		for(var i = 1; i < tor_redir_array.length; i++){
+		//user icon
+		var userIconBase64 = "NoIcon";
+		var clientName, deviceType, deviceVender;
+		for(var i=1; i<tor_redir_array.length; i++){
+
+			mac = tor_redir_array[i];
+
+			if(clientList[mac]) {
+				clientName = (clientList[mac].nickName == "") ? clientList[mac].name : clientList[mac].nickName;
+				deviceType = clientList[mac].type;
+				deviceVender = clientList[mac].vendor;
+			}
+			else {
+				clientName = ruleArray[0]; // TODO: Use some kind of default name, or empty string?
+				deviceType = 0;
+				deviceVender = "";
+			}
 			code +='<tr id="row'+i+'">';
-			code +='<td width="80%">'+ tor_redir_array[i] +'</td>';	
+			code +='<td width="80%" title="'+mac+'">';
+
+			code += '<table width="100%"><tr><td style="width:35%;border:0;float:right;padding-right:30px;">';
+			if(clientList[mac] == undefined) {
+				code += '<div class="clientIcon type0" onClick="popClientListEditTable(&quot;' + mac + '&quot;, this, &quot;' + clientName + '&quot;, &quot;&quot;, &quot;DNSFilter&quot;)"></div>';
+			}
+			else {
+				if(usericon_support) {
+					userIconBase64 = getUploadIcon(mac.replace(/\:/g, ""));
+				}
+				if(userIconBase64 != "NoIcon") {
+					code += '<div style="text-align:center;" onClick="popClientListEditTable(&quot;' + mac + '&quot;, this, &quot;' + clientName + '&quot;, &quot;&quot;, &quot;DNSFilter&quot;)"><img class="imgUserIcon_card" src="' + userIconBase64 + '"></div>';
+				}
+				else if(deviceType != "0" || deviceVender == "") {
+					code += '<div class="clientIcon type' + deviceType + '" onClick="popClientListEditTable(&quot;' + mac + '&quot;, this, &quot;' + clientName + '&quot;, &quot;&quot;, &quot;DNSFilter&quot;)"></div>';
+				}
+				else if(deviceVender != "" ) {
+					var venderIconClassName = getVenderIconClassName(deviceVender.toLowerCase());
+					if(venderIconClassName != "") {
+						code += '<div class="venderIcon ' + venderIconClassName + '" onClick="popClientListEditTable(&quot;' + mac + '&quot;, this, &quot;' + clientName + '&quot;, &quot;&quot;, &quot;DNSFilter&quot;)"></div>';
+					}
+					else {
+						code += '<div class="clientIcon type' + deviceType + '" onClick="popClientListEditTable(&quot;' + mac + '&quot;, this, &quot;' + clientName + '&quot;, &quot;&quot;, &quot;DNSFilter&quot;)"></div>';
+					}
+				}
+			}
+
+			code += '</td><td id="client_info_'+i+'" style="width:65%;text-align:left;border:0;">';
+			code += '<div>' + clientName + '</div>';
+			code += '<div>' + mac + '</div>';
+			code += '</td></tr></table>';
+			code +='</td>';
 			code +='<td width="20%"><input type="button" class=\"remove_btn\" onclick=\"deleteRow(this);\" value=\"\"/></td></tr>';
 		}
 	}
@@ -128,7 +141,7 @@ function addRow(obj){
 	}
 		
 	for(i = 0; i < device_num; i++){
-		if(obj.value.toLowerCase() == document.getElementById('tor_redir_list_table').rows[i].cells[0].innerHTML.toLowerCase()){
+		if(obj.value.toLowerCase() == document.getElementById('tor_redir_list_table').rows[i].cells[0].title.toLowerCase()){
 			alert("<#JS_duplicate#>");
 			return false;
 		}
@@ -146,7 +159,7 @@ function applyRule(){
 
 		for(i = 0; i < device_num; i++){
 			value += "<"		
-			value += document.getElementById('tor_redir_list_table').rows[i].cells[0].innerHTML;
+			value += document.getElementById('tor_redir_list_table').rows[i].cells[0].title;
 		}
 
 		if(value == "<"+"<#IPConnection_VSList_Norule#>" || value == "<"){
@@ -189,36 +202,15 @@ function check_macaddr(obj,flag){ //control hint of input mac address
 function setClientMac(num){
 	document.form.tor_maclist_0.value = num;
 	hideClients_Block();
-	over_var = 0;
 }
 
-function showLANMacList(){
-	var htmlCode = "";
-	for(var i=0; i<clientList.length;i++){
-		var clientObj = clientList[clientList[i]];
-
-		if(clientObj.mac == "offline") clientObj.mac = "";
-		if(clientObj.name.length > 30) clientObj.name = clientObj.name.substring(0, 28) + "..";
-
-		htmlCode += '<a><div onmouseover="over_var=1;" onmouseout="over_var=0;" onclick="setClientMac(\'';
-		htmlCode += clientObj.mac;
-		htmlCode += '\');"><strong>'+clientObj.name+'</strong>';
-		htmlCode += ' ( '+clientObj.mac+' )';
-		htmlCode += '</div></a><!--[if lte IE 6.5]><iframe class="hackiframe2"></iframe><![endif]-->';	
-	}
-
-	document.getElementById("TORMACList").innerHTML = htmlCode;
-}
-
-var over_var = 0;
-var isMenuopen = 0;
-
-function pullLANMacList(obj){	
+function pullLANMacList(obj){
+	var element = document.getElementById('TORMACList');
+	var isMenuopen = element.offsetWidth > 0 || element.offsetHeight > 0;	
 	if(isMenuopen == 0){		
 		obj.src = "/images/arrow-top.gif"
-		document.getElementById("TORMACList").style.display = 'block';		
+		element.style.display = 'block';		
 		document.form.tor_maclist_0.focus();		
-		isMenuopen = 1;
 	}
 	else
 		hideClients_Block();
@@ -227,7 +219,6 @@ function pullLANMacList(obj){
 function hideClients_Block(){
 	document.getElementById("pull_arrow").src = "/images/arrow-down.gif";
 	document.getElementById('TORMACList').style.display='none';
-	isMenuopen = 0;
 }
 
 function check_macaddr(obj,flag){ //control hint of input mac address
@@ -384,8 +375,8 @@ function show_tor_settings(value){
 						<tr>
 							<td width="80%">
 								<input type="text" style="margin-left:220px;float:left;" maxlength="17" class="input_macaddr_table" name="tor_maclist_0" onKeyPress="return validator.isHWAddr(this,event)">
-								<img style="float:left;" id="pull_arrow" height="14px;" src="/images/arrow-down.gif" onclick="pullLANMacList(this);" title="Select the MAC address of the device." onmouseover="over_var=1;" onmouseout="over_var=0;">
-								<div id="TORMACList" class="TORMACList"></div>
+								<img style="float:left;" id="pull_arrow" height="14px;" src="/images/arrow-down.gif" onclick="pullLANMacList(this);" title="Select the MAC address of the device.">
+								<div id="TORMACList" class="clientlist_dropdown" style="margin-left:220px;margin-top:25px;"></div>
 								</div>
 							</td>
 							<td width="20%">	

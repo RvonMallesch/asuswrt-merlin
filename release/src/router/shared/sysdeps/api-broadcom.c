@@ -175,80 +175,6 @@ skip:
 	return SWITCH_UNKNOWN;
 }
 
-#ifdef MISSING_PRIVATE
-#ifdef RTCONFIG_BCM5301X_TRAFFIC_MONITOR
-
-uint32_t robo_ioctl_len(int fd, int write, int page, int reg, uint32_t *value, uint32_t len)
-{
-	static int __ioctl_args[2] = { SIOCGETCROBORD, SIOCSETCROBOWR };
-	struct ifreq ifr;
-	int ret, vecarg[4];
-	int i;
-
-	memset(&ifr, 0, sizeof(ifr));
-	strcpy(ifr.ifr_name, "eth0");
-	ifr.ifr_data = (caddr_t) vecarg;
-
-	vecarg[0] = (page << 16) | reg;
-	vecarg[1] = len;
-
-	ret = ioctl(fd, __ioctl_args[write], (caddr_t)&ifr);
-
-	*value = vecarg[2];
-
-	return ret;
-}
-
-uint32_t traffic_wanlan(char *ifname, uint32_t *rx, uint32_t *tx)
-{
-	int fd, model;
-	uint32_t value;
-	char port_name[30] = {0};
-	char port[30], *next;
-
-	*rx = 0;
-	*tx = 0;
-
-	strcat_r(ifname, "ports", port_name);
-
-	fd = socket(AF_INET, SOCK_DGRAM, 0);
-	if (fd < 0) return 0;
-
-	/* RX */
-	foreach (port, nvram_safe_get(port_name), next) {
-		if(strncmp(port, CPU_PORT, 1) != 0
-#ifdef RTAC87U
-			&& strncmp(port, RGMII_PORT, 1) != 0
-#endif
-		){
-			if (robo_ioctl_len(fd, 0 /* robord */, MIB_P0_PAGE + atoi(port), MIB_RX_REG, &value, 8) < 0)
-				_dprintf("et ioctl SIOCGETCROBORD failed!\n");
-			else{
-				*rx = *rx + value;
-			}
-		}
-	}
-
-	/* TX */
-	foreach (port, nvram_safe_get(port_name), next) {
-		if(strncmp(port, CPU_PORT, 1) != 0
-#ifdef RTAC87U
-			&& strncmp(port, RGMII_PORT, 1) != 0
-#endif
-		){
-			if (robo_ioctl_len(fd, 0 /* robord */, MIB_P0_PAGE + atoi(port), MIB_TX_REG, &value, 8) < 0)
-				_dprintf("et ioctl SIOCGETCROBORD failed!\n");
-			else{
-				*tx = *tx  + value;
-			}
-		}
-	}
-	close(fd);
-	return 1;
-}
-#endif	/* RTCONFIG_BCM5301X_TRAFFIC_MONITOR */
-#endif /* MISSING_PRIVATE */
-
 int robo_ioctl(int fd, int write, int page, int reg, uint32_t *value)
 {
 	static int __ioctl_args[2] = { SIOCGETCROBORD, SIOCSETCROBOWR };
@@ -544,84 +470,6 @@ int check_imageheader(char *buf, long *filelen)
 	else return 0;
 }
 
-/*
- * 0: illegal image
- * 1: legal image
- *
- * check product id, crc ..
- */
-
-int check_imagefile(char *fname)
-{
-	FILE *fp;
-	struct version_t {
-		uint8_t ver[4];			/* Firmware version */
-		uint8_t pid[MAX_PID_LEN];	/* Product Id */
-		uint8_t hw[MAX_HW_COUNT][4];	/* Compatible hw list lo maj.min, hi maj.min */
-#ifdef RTCONFIG_BCMWL6A
-		uint16_t sn;
-		uint16_t en;
-#endif
-		uint8_t	pad[0];			/* Padding up to MAX_VERSION_LEN */
-	} version;
-	int i, model;
-
-	fp = fopen(fname, "r");
-	if (fp == NULL)
-		return 0;
-
-	fseek(fp, -MAX_VERSION_LEN, SEEK_END);
-	fread(&version, 1, sizeof(version), fp);
-	fclose(fp);
-
-	_dprintf("productid field in image: %.12s\n", version.pid);
-
-	for (i = 0; i < sizeof(version); i++)
-		_dprintf("%02x ", ((uint8_t *)&version)[i]);
-	_dprintf("\n");
-
-	/* safe strip trailing spaces */
-	for (i = 0; i < MAX_PID_LEN && version.pid[i] != '\0'; i++);
-	for (i--; i >= 0 && version.pid[i] == '\x20'; i--)
-		version.pid[i] = '\0';
-
-	if (!check_crc(fname)) {
-		_dprintf("check crc error!!!\n");
-		return 0;
-	}
-
-#if defined(RTCONFIG_BCMWL6A) && !(defined(RTCONFIG_BCM7) || defined(RTCONFIG_BCM_7114))
-	doSystem("nvram set cpurev=`cat /dev/mtd0 | grep cpurev | cut -d \"=\" -f 2`");
-	if (nvram_match("cpurev", "c0") &&
-	   (!version.sn ||
-	    !version.en ||
-	     version.sn < 380 ||
-	    (version.sn == 380 && version.en < 738)))
-	{
-		dbg("version check fail!\n");
-		return 0;
-	}
-#endif
-
-	model = get_model();
-
-	/* compare up to the first \0 or MAX_PID_LEN
-	 * nvram productid or hw model's original productid */
-	if (strncmp(nvram_safe_get("productid"), (char *) version.pid, MAX_PID_LEN) == 0 ||
-	    strncmp(get_modelid(model), (char *) (char *) version.pid, MAX_PID_LEN) == 0)
-	{
-		return 1;
-	}
-
-	/* common RT-N12 productid FW image */
-	if ((model == MODEL_RTN12B1 || model == MODEL_RTN12C1 ||
-	     model == MODEL_RTN12D1 || model == MODEL_RTN12VP || model == MODEL_RTN12HP || model == MODEL_RTN12HP_B1 ||model == MODEL_APN12HP) &&
-	     strncmp(get_modelid(MODEL_RTN12), (char *) version.pid, MAX_PID_LEN) == 0)
-		return 1;
-
-	return 0;
-}
-
 #ifdef RTCONFIG_QTN
 char *wl_vifname_qtn(int unit, int subunit)
 {
@@ -756,4 +604,65 @@ void set_radio(int on, int unit, int subunit)
 		led_control(LED_2G, LED_OFF);
 		led_control(LED_5G, LED_OFF);
 	}
+}
+
+/* Return nvram variable name, e.g. et0macaddr, which is used to repented as LAN MAC.
+ * @return:
+ */
+char *get_lan_mac_name(void)
+{
+#ifdef RTCONFIG_BCMARM
+#ifdef RTCONFIG_GMAC3
+	if (!nvram_match("stop_gmac3", "1"))
+		return "et2macaddr";
+#endif
+	switch(get_model()) {
+		case MODEL_RTAC87U:
+		case MODEL_RTAC5300:
+		case MODEL_RTAC5300R:
+		case MODEL_RTAC88U:
+			return "et1macaddr";
+		default:
+			return "et0macaddr";
+	}
+#endif
+	return "et0macaddr";
+}
+
+/* Return nvram variable name, e.g. et1macaddr, which is used to repented as WAN MAC.
+ * @return:
+ */
+char *get_wan_mac_name(void)
+{
+#ifdef RTCONFIG_BCMARM
+#ifdef RTCONFIG_GMAC3
+	if (!nvram_match("stop_gmac3", "1"))
+		return "et2macaddr";
+#endif
+	switch(get_model()) {
+		case MODEL_RTAC87U:
+		case MODEL_RTAC5300:
+		case MODEL_RTAC5300R:
+		case MODEL_RTAC88U:
+			return "et1macaddr";
+		default:
+			return "et0macaddr";
+	}
+#endif
+	return "et0macaddr";
+}
+
+char *get_lan_hwaddr(void)
+{
+	return nvram_safe_get(get_lan_mac_name());
+}
+
+char *get_2g_hwaddr(void)
+{
+	return nvram_safe_get(get_lan_mac_name());
+}
+
+char *get_wan_hwaddr(void)
+{
+	return nvram_safe_get(get_wan_mac_name());
 }

@@ -66,14 +66,21 @@ endif
 
 	mkdir -p $(INSTALLDIR)/usr/sbin
 ifeq ($(RTCONFIG_USB),y)
+ifneq ($(APP),none)
 	install -m 0755 apps_scripts/asusrouter $(INSTALLDIR)/rom/.asusrouter
 	install -m 0755 apps_scripts/app_*.sh $(INSTALLDIR)/usr/sbin
 	install -m 0755 apps_scripts/check_spectrum.sh $(INSTALLDIR)/usr/sbin
+endif
 ifeq ($(RTCONFIG_USB_MODEM),y)
 	install -m 0644 spn_*.dat $(INSTALLDIR)/rom
 	install -m 0755 apps_scripts/find_modem_*.sh $(INSTALLDIR)/usr/sbin
 	install -m 0755 apps_scripts/modem_*.sh $(INSTALLDIR)/usr/sbin
 	install -m 0755 apps_scripts/3ginfo.sh $(INSTALLDIR)/usr/sbin
+ifeq ($(RTCONFIG_INTERNAL_GOBI),y)
+ifeq ($(RT4GAC55U),y)
+	install -m 0755 apps_scripts/gobi_update.sh $(INSTALLDIR)/usr/sbin
+endif
+endif
 endif
 endif
 
@@ -81,6 +88,18 @@ ifeq ($(RTCONFIG_DSL),y)
 	cp -f webs_scripts/notif_update.sh $(INSTALLDIR)/usr/sbin/notif_update.sh
 endif
 	#install -m 0755 webs_scripts/*.sh $(INSTALLDIR)/usr/sbin
+
+ifeq ($(RTCONFIG_MERLINUPDATE),y)
+	cp -f webs_scripts/merlin_webs_update.sh $(INSTALLDIR)/usr/sbin/webs_update.sh
+ifeq ($(RTCONFIG_BWDPI),y)
+	cp -f webs_scripts/sig_upgrade.sh $(INSTALLDIR)/usr/sbin/sig_upgrade.sh
+	cp -f webs_scripts/sig_update.sh $(INSTALLDIR)/usr/sbin/sig_update.sh
+endif
+ifeq ($(RTCONFIG_HTTPS),y)
+	cp -f webs_scripts/public.pem $(INSTALLDIR)/usr/sbin/public.pem
+endif
+
+else	#merlinupdate
 ifeq ($(RTCONFIG_AUTOLIVEUPDATE_ZIP),y)
 	cp -f webs_scripts/zip_webs_upgrade.sh $(INSTALLDIR)/usr/sbin/webs_upgrade.sh
 	cp -f webs_scripts/zip_webs_update.sh $(INSTALLDIR)/usr/sbin/webs_update.sh
@@ -91,17 +110,17 @@ endif
 ifeq ($(RTCONFIG_HTTPS),y)
 	cp -f webs_scripts/public.pem $(INSTALLDIR)/usr/sbin/public.pem
 endif
-else
+else # autoliveupdate_zip
 ifeq ($(RTCONFIG_HTTPS),y)
 	cp -f webs_scripts/ssl_webs_upgrade.sh $(INSTALLDIR)/usr/sbin/webs_upgrade.sh
 else
 	cp -f webs_scripts/nozip_webs_upgrade.sh $(INSTALLDIR)/usr/sbin/webs_upgrade.sh
 endif
 
-ifeq ($(RTCONFIG_HTTPS),y)
 	cp -f webs_scripts/ssl_webs_update.sh $(INSTALLDIR)/usr/sbin/webs_update.sh
-else
-	cp -f webs_scripts/nozip_webs_update.sh $(INSTALLDIR)/usr/sbin/webs_update.sh
+
+ifeq ($(RTAC68A),y)
+	cp -f webs_scripts/force_webs_update.sh $(INSTALLDIR)/usr/sbin/webs_update.sh
 endif
 
 ifeq ($(RTCONFIG_BWDPI),y)
@@ -111,10 +130,11 @@ endif
 ifeq ($(RTCONFIG_HTTPS),y)
 	cp -f webs_scripts/public.pem $(INSTALLDIR)/usr/sbin/public.pem
 endif
-endif
+endif	#autoliveupdate_zip
+endif	#merlinupdate
 
 #	Used by Curl
-	cp -f others/ca-bundle.crt $(INSTALLDIR)/rom/ca-bundle.crt
+	cp -f --preserve=timestamps others/ca-bundle.crt $(INSTALLDIR)/rom/ca-bundle.crt
 
 ifeq ($(RTCONFIG_OPENVPN),y)
 	cp -f others/dh2048.pem	 $(INSTALLDIR)/rom/dh2048.pem
@@ -131,16 +151,8 @@ else
 	rm -f $(INSTALLDIR)/rom/etc/openssl.cnf
 endif
 
-ifeq ($(RTCONFIG_DNSSEC),y)
-	cp rom/etc/dnssec-trust-anchors $(INSTALLDIR)/rom/etc/dnssec-trust-anchors
-else
-	rm -rf $(INSTALLDIR)/rom/etc/dnssec-trust-anchors
-endif
-
-ifeq ($(RTCONFIG_DUALWAN),y)
-	cp -rf rom/etc/static_routes $(INSTALLDIR)/rom/etc/
-else
-	rm -rf $(INSTALLDIR)/rom/etc/static_routes
+ifneq ($(RTCONFIG_BCMARM),y)
+	rm -f $(INSTALLDIR)/rom/etc/modprobe.conf
 endif
 
 ifeq ($(RTCONFIG_RALINK_RT3883),y)
@@ -159,12 +171,12 @@ endif
 
 ifeq ($(RTCONFIG_MEDIA_SERVER),y)
 	mkdir -p $(INSTALLDIR)/rom/dlna
-ifeq ($(RTCONFIG_INTERNAL_GOBI),y)
-	cp -rf dlna/icon_sm.rt-ac68u.jpg $(INSTALLDIR)/rom/dlna/icon_sm.jpg
-	cp -rf dlna/icon_sm.rt-ac68u.png $(INSTALLDIR)/rom/dlna/icon_sm.png
-	cp -rf dlna/icon_lrg.rt-ac68u.jpg $(INSTALLDIR)/rom/dlna/icon_lrg.jpg
-	cp -rf dlna/icon_lrg.rt-ac68u.png $(INSTALLDIR)/rom/dlna/icon_lrg.png
-else
+ifeq ($(BUILD_NAME), RT-AC68U)
+	cp -rf dlna/icon_sm.rt-ac66u_v2.jpg $(INSTALLDIR)/rom/dlna/icon_alt_sm.jpg
+	cp -rf dlna/icon_sm.rt-ac66u_v2.png $(INSTALLDIR)/rom/dlna/icon_alt_sm.png
+	cp -rf dlna/icon_lrg.rt-ac66u_v2.jpg $(INSTALLDIR)/rom/dlna/icon_alt_lrg.jpg
+	cp -rf dlna/icon_lrg.rt-ac66u_v2.png $(INSTALLDIR)/rom/dlna/icon_alt_lrg.png
+endif
 ifeq ($(and $(LJPG),$(SJPG),$(LPNG),$(SPNG)),)
 	$(warning Add media server icon for $(BUILD_NAME) !!!!!!!!!!!!)
 else
@@ -172,10 +184,11 @@ else
 		install -D dlna/$(f).$(LCMODELNAME).png $(INSTALLDIR)/rom/dlna/$(f).png;)
 endif
 endif
-endif
 
 ifeq ($(RTCONFIG_GETREALIP),y)
 	mkdir -p $(INSTALLDIR)/usr/sbin
 	install -m 0755 apps_scripts/getrealip.sh $(INSTALLDIR)/usr/sbin/getrealip.sh
 endif
+
+	install -m 0755 webs_scripts/GoogleDNS_Update.sh $(INSTALLDIR)/usr/sbin
 

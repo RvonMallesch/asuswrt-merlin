@@ -12,6 +12,7 @@ create_client_list(){
 	server=$1
 	VPN_IP_LIST=$(nvram get vpn_client$(echo $instance)_clientlist)
 
+	OLDIFS=$IFS
 	IFS="<"
 
 	for ENTRY in $VPN_IP_LIST
@@ -96,8 +97,8 @@ then
 		service updateresolv
 	elif [ $script_type == 'down' ]; then
 		rm $dnsscript
-		service updateresolv
-		service restart_dnsmasq
+		service updateresolv # also restarts or reloads dnsmasq as necessary
+#		service restart_dnsmasq
 	fi
 fi
 

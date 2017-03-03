@@ -27,7 +27,8 @@
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/resource.h>
-
+#include <sys/wait.h>
+#include <errno.h>
 #include "config.h"
 
 #ifdef ENABLE_NLS
@@ -46,6 +47,7 @@
 #include "albumart.h"
 #include "containers.h"
 #include "log.h"
+#include "inotify.h"
 
 #if SCANDIR_CONST
 typedef const struct dirent scan_filter;
@@ -384,6 +386,68 @@ insert_containers(const char *name, const char *path, const char *refID, const c
 }
 
 int64_t
+insert_directory0(const char *name, const char *path, const char *base, const char *parentID, int objectID)
+{
+	int64_t detailID = 0;
+	char class[] = "container.storageFolder";
+	char *result, *p;
+	static char last_found[256] = "-1";
+
+	if( strcmp(base, BROWSEDIR_ID) != 0 )
+	{
+		int found = 0;
+		char id_buf[64], parent_buf[64], refID[64];
+		char *dir_buf, *dir;
+
+ 		dir_buf = strdup(path);
+		dir = dirname(dir_buf);
+		snprintf(refID, sizeof(refID), "%s%s$%X", BROWSEDIR_ID, parentID, objectID);
+		snprintf(id_buf, sizeof(id_buf), "%s%s$%X", base, parentID, objectID);
+		snprintf(parent_buf, sizeof(parent_buf), "%s%s", base, parentID);
+		while( !found )
+		{
+			if( valid_cache && strcmp(id_buf, last_found) == 0 )
+				break;
+			if( sql_get_int_field(db, "SELECT count(*) from OBJECTS where OBJECT_ID = '%s'", id_buf) > 0 )
+			{
+				strcpy(last_found, id_buf);
+				break;
+			}
+			/* Does not exist.  Need to create, and may need to create parents also */
+			result = sql_get_text_field(db, "SELECT DETAIL_ID from OBJECTS where OBJECT_ID = '%s'", refID);
+			if( result )
+			{
+				detailID = strtoll(result, NULL, 10);
+				sqlite3_free(result);
+			}
+			sql_exec(db, "INSERT into OBJECTS"
+			             " (OBJECT_ID, PARENT_ID, REF_ID, DETAIL_ID, CLASS, NAME) "
+			             "VALUES"
+			             " ('%s', '%s', %Q, %lld, '%s', '%q')",
+                         id_buf, parent_buf, refID, detailID, class, strrchr(dir, '/')+1);
+            if( (p = strrchr(id_buf, '$')) )
+				*p = '\0';
+            if( (p = strrchr(parent_buf, '$')) )
+				*p = '\0';
+            if( (p = strrchr(refID, '$')) )
+				*p = '\0';
+			dir = dirname(dir);
+		}
+		free(dir_buf);
+        exit(0);
+	}
+
+	detailID = GetFolderMetadata(name, path, NULL, NULL, find_album_art(path, NULL, 0));
+	sql_exec(db, "INSERT into OBJECTS"
+	             " (OBJECT_ID, PARENT_ID, DETAIL_ID, CLASS, NAME) "
+	             "VALUES"
+	             " ('%s%s$%X', '%s%s', %lld, '%s', '%q')",
+	             base, parentID, objectID, base, parentID, detailID, class, name);
+
+    exit(0);
+}
+
+int64_t
 insert_directory(const char *name, const char *path, const char *base, const char *parentID, int objectID)
 {
 	int64_t detailID = 0;
@@ -445,6 +509,134 @@ insert_directory(const char *name, const char *path, const char *base, const cha
 	return detailID;
 }
 
+//#ifdef MS_IPK
+int
+insert_file0(char *name, const char *path, const char *parentID, int object, media_types types)
+{
+    char class[32];
+    char objectID[64];
+    int64_t detailID = 0;
+    char base[8];
+    char *typedir_parentID;
+    char *baseid;
+    char *orig_name = NULL;
+
+
+    int a, v, p;
+    FILE * fp;
+
+    fp=fopen("/tmp/count","r");
+    if(fp){
+        DPRINTF(E_DEBUG, L_SCANNER, "read /tmp/count\n");
+        while (!feof(fp)){
+            fscanf(fp, "%d\n%d\n%d\n", &a,&v,&p);
+        }
+        fclose(fp);
+
+    }
+    else{
+        a=0;
+        v=0;
+        p=0;
+    }
+
+
+    if( (types & TYPE_IMAGES) && is_image(name) )
+    {
+        if( is_album_art(name) )
+            exit(-1);
+        strcpy(base, IMAGE_DIR_ID);
+        strcpy(class, "item.imageItem.photo");
+        detailID = GetImageMetadata(path, name);
+        if( detailID )
+            ++p;
+
+        DPRINTF(E_DEBUG, L_SCANNER, "picture_number= %d\n", p);
+    }
+    else if( (types & TYPE_VIDEO) && is_video(name) )
+    {
+        orig_name = strdup(name);
+        strcpy(base, VIDEO_DIR_ID);
+        strcpy(class, "item.videoItem");
+        detailID = GetVideoMetadata(path, name);
+        if( !detailID )
+            strcpy(name, orig_name);
+        if( detailID )
+            ++v;
+
+        DPRINTF(E_DEBUG, L_SCANNER, "video_number= %d\n", v);
+
+    }
+    else if( is_playlist(name) )
+    {
+        if( insert_playlist(path, name) == 0 )
+            exit(1);
+    }
+    if( !detailID && (types & TYPE_AUDIO) && is_audio(name) )
+    {
+        strcpy(base, MUSIC_DIR_ID);
+        strcpy(class, "item.audioItem.musicTrack");
+        detailID = GetAudioMetadata(path, name);
+        if(detailID)
+            ++a;
+
+        DPRINTF(E_DEBUG, L_SCANNER, "audio_number= %d\n", a);
+
+    }
+
+    fp=fopen("/tmp/count","w");
+    if(fp)
+    {
+        fprintf(fp, "%d\n%d\n%d\n", a,v,p);
+        fclose(fp);
+    }
+
+
+    free(orig_name);
+    if( !detailID )
+    {
+        DPRINTF(E_WARN, L_SCANNER, "Unsuccessful getting details for %s!\n", path);
+        exit(-1);
+    }
+
+    sprintf(objectID, "%s%s$%X", BROWSEDIR_ID, parentID, object);
+
+    //DPRINTF(E_WARN, L_SCANNER, _("insert_file0-sql_exec,objectid=%s\n"),objectID);
+    sql_exec(db, "INSERT into OBJECTS"
+                 " (OBJECT_ID, PARENT_ID, CLASS, DETAIL_ID, NAME) "
+                 "VALUES"
+                 " ('%s', '%s%s', '%s', %lld, '%q')",
+                 objectID, BROWSEDIR_ID, parentID, class, detailID, name);
+    //DPRINTF(E_WARN, L_SCANNER, _("after--insert_file0-sql_exec\n"));
+
+    if( *parentID )
+    {
+        int typedir_objectID = 0;
+        typedir_parentID = strdup(parentID);
+        baseid = strrchr(typedir_parentID, '$');
+        if( baseid )
+        {
+            typedir_objectID = strtol(baseid+1, NULL, 16);
+            *baseid = '\0';
+        }
+        insert_directory(name, path, base, typedir_parentID, typedir_objectID);
+        free(typedir_parentID);
+    }
+
+    //DPRINTF(E_WARN, L_SCANNER, _("insert_file0--sql_exec 2--objectid=%s%s$%X\n"),base, parentID, object);
+    sql_exec(db, "INSERT into OBJECTS"
+                 " (OBJECT_ID, PARENT_ID, REF_ID, CLASS, DETAIL_ID, NAME) "
+                 "VALUES"
+                 " ('%s%s$%X', '%s%s', '%s', '%s', %lld, '%q')",
+                 base, parentID, object, base, parentID, objectID, class, detailID, name);
+
+    //DPRINTF(E_WARN, L_SCANNER, _("after--insert_file0-sql_exec 2\n"));
+
+    insert_containers(name, path, objectID, class, detailID);
+    exit(0);
+}
+//#else
+/*
 int
 insert_file(char *name, const char *path, const char *parentID, int object, media_types types)
 {
@@ -521,6 +713,7 @@ insert_file(char *name, const char *path, const char *parentID, int object, medi
 	insert_containers(name, path, objectID, class, detailID);
 	return 0;
 }
+#endif*/
 
 int
 CreateDatabase(void)
@@ -594,7 +787,8 @@ CreateDatabase(void)
 			ret = sql_exec(db, "INSERT into OBJECTS (OBJECT_ID, PARENT_ID, DETAIL_ID, CLASS, NAME)"
 			                   " values "
 					   "('%s', '%s', %lld, 'container.storageFolder', '%q')",
-					   magic->objectid_match, parent, GetFolderMetadata(magic->name, NULL, NULL, NULL, 0), magic->name);
+					   magic->objectid_match, parent,
+					   GetFolderMetadata(_(magic->name), NULL, NULL, NULL, 0), _(magic->name));
 			free(parent);
 			if( ret != SQLITE_OK )
 				goto sql_failed;
@@ -713,7 +907,7 @@ filter_avp(scan_filter *d)
 	       );
 }
 
-static int
+int
 path_is_dir(const char *path)
 {
 	struct stat stat_buf;
@@ -724,7 +918,7 @@ path_is_dir(const char *path)
 		return 0;
 }
 
-static int
+int
 is_sys_dir(const char *dirname)
 {
 	char *MS_System_folder[] = {"SYSTEM VOLUME INFORMATION", "RECYCLER", "RECYCLED", "$RECYCLE.BIN", NULL};
@@ -753,6 +947,16 @@ ScanDirectory(const char *dir, const char *parent, media_types dir_types)
 	char *name = NULL;
 	static long long unsigned int fileno = 0;
 	enum file_types type;
+
+
+    pid_t pid;
+    int stat_val;
+//    pid_t child_pid;
+#ifdef MS_IPK
+    FILE *fp;
+    char memdata[256] = {0};
+    unsigned int memfree = 0;
+#endif
 
 	DPRINTF(parent?E_INFO:E_WARN, L_SCANNER, _("Scanning %s\n"), dir);
 	switch( dir_types )
@@ -808,6 +1012,33 @@ ScanDirectory(const char *dir, const char *parent, media_types dir_types)
 		if( quitting )
 			break;
 #endif
+
+#ifdef MS_IPK
+        if((fp = fopen("/proc/meminfo", "r")) != NULL){
+            while(fgets(memdata, 255, fp) != NULL){
+                if(strstr(memdata, "MemFree") != NULL){
+                    sscanf(memdata, "MemFree: %d kB", &memfree);
+                    break;
+                }
+            }
+            fclose(fp);
+        }
+        DPRINTF(E_DEBUG, L_SCANNER, _("memfree=%d\n"),memfree);
+        while(memfree<=5120){
+            DPRINTF(E_DEBUG, L_SCANNER, _("memory<5120\n"));
+            sleep(2);
+            if((fp = fopen("/proc/meminfo", "r")) != NULL){
+                while(fgets(memdata, 255, fp) != NULL){
+                    if(strstr(memdata, "MemFree") != NULL){
+                        sscanf(memdata, "MemFree: %d kB", &memfree);
+                        break;
+                    }
+                }
+                fclose(fp);
+            }
+        }
+#endif
+
 		type = TYPE_UNKNOWN;
 		snprintf(full_path, PATH_MAX, "%s/%s", dir, namelist[i]->d_name);
 		name = escape_tag(namelist[i]->d_name, 1);
@@ -834,6 +1065,83 @@ ScanDirectory(const char *dir, const char *parent, media_types dir_types)
 			type = resolve_unknown_type(full_path, dir_types);
 		}
 		if( (type == TYPE_DIR) && (access(full_path, R_OK|X_OK) == 0) )
+//#ifdef MS_IPK
+		{
+            char *parent_id;
+            pid=fork();
+            switch(pid){
+            case 0:
+                DPRINTF(E_DEBUG, L_SCANNER, _("child process is running, curpid is %d,parent pid is %d\n"),pid, getppid());
+                DPRINTF(E_DEBUG, L_SCANNER, _("name=%s,full_path=%s,parent=%s\n"), name, full_path ,parent );
+                insert_directory0(name, full_path, BROWSEDIR_ID, THISORNUL(parent), i+startID);
+                break;
+            case -1:
+                DPRINTF(E_ERROR, L_SCANNER, _("process creation failed!\n"));
+                exit(EXIT_FAILURE);
+                break;
+            default:
+                DPRINTF(E_DEBUG, L_SCANNER, _("parent process is running,childpid is %d,parentpid is %d\n"),pid, getppid());
+
+            }
+            if(pid!=0){//for parent process wait for child process ending
+//                child_pid = wait(&stat_val);
+		wait(&stat_val);
+                DPRINTF(E_DEBUG, L_SCANNER, _("child process has exited pid is %d\n"),pid);
+                if(!WIFEXITED(stat_val)){
+                   DPRINTF(E_DEBUG, L_SCANNER, _("child process exited abnormally\n"));
+                }
+            }
+
+
+			xasprintf(&parent_id, "%s$%X", THISORNUL(parent), i+startID);
+
+            char parent_id0[strlen(parent_id)+1];
+            sprintf(parent_id0,"%s",parent_id);
+            free(parent_id);
+            parent_id=NULL;
+
+            //ScanDirectory(full_path, parent_id, dir_types);
+            // process SQL ERROR 19 [column OBJECT_ID is not unique] when scan many directory
+			ScanDirectory(full_path, parent_id0, dir_types);
+            //free(parent_id);
+		}
+		else if( type == TYPE_FILE && (access(full_path, R_OK) == 0) )
+        {
+
+#ifdef MS_IPK
+            if(fileno>=25000)
+            {
+                DPRINTF(E_WARN, L_SCANNER, _("all type file number is too many!\n"));
+                break;
+            }
+#endif
+            pid=fork();
+            switch(pid){
+            case 0:
+                insert_file0(name, full_path, THISORNUL(parent), i+startID, dir_types);
+                break;
+            case -1:
+                DPRINTF(E_ERROR, L_SCANNER, _("process creation failed!\n"));
+                break;
+            default:
+                DPRINTF(E_DEBUG, L_SCANNER, _("parent process is running,childpid is %d,parentpid is %d\n"),pid, getppid());
+
+            }
+            if(pid!=0){//for parent process wait for child process ending
+//                child_pid = wait(&stat_val);
+                wait(&stat_val);
+                DPRINTF(E_DEBUG, L_SCANNER, _("child process has exited pid is %d\n"),pid);
+                if(WIFEXITED(stat_val)){
+                    if(WEXITSTATUS(stat_val)==0){
+                        fileno++;
+                        DPRINTF(E_DEBUG, L_SCANNER, _("Scanning %s (%llu files)!\n"), dir, fileno);
+                    }
+                }
+                else
+                    DPRINTF(E_WARN, L_SCANNER, _("child process exited abnormally\n"));
+            }
+		}
+/*#else
 		{
 			char *parent_id;
 			insert_directory(name, full_path, BROWSEDIR_ID, THISORNUL(parent), i+startID);
@@ -846,10 +1154,13 @@ ScanDirectory(const char *dir, const char *parent, media_types dir_types)
 			if( insert_file(name, full_path, THISORNUL(parent), i+startID, dir_types) == 0 )
 				fileno++;
 		}
+#endif*/
 		free(name);
 		free(namelist[i]);
 	}
-	free(namelist);
+	if(namelist!=NULL){
+		free(namelist);
+	}
 	free(full_path);
 	if( !parent )
 	{
@@ -884,6 +1195,68 @@ _notify_stop(void)
 #endif
 }
 
+/* rescan functions added by shrimpkin@sourceforge.net */
+static int
+cb_orphans(void *args, int argc, char **argv, char **azColName)
+{
+	struct stat file;
+	char *path = argv[0], *mime = argv[1];
+
+	/* If we can't stat path, remove it */
+	if (stat(path, &file) != 0)
+	{
+		DPRINTF(E_DEBUG, L_SCANNER, "Removing %s [%s]!\n", path, (mime) ? "file" : "dir");
+		if (mime)
+		{
+			inotify_remove_file(path);
+		}
+		else
+		{
+			inotify_remove_directory(0, path);
+		}
+	}
+	return 0;
+}
+
+void
+start_rescan()
+{
+	struct media_dir_s *media_path;
+	char path[MAXPATHLEN], buf[MAXPATHLEN], *esc_name = NULL, *zErrMsg;
+	char *sql_files = "SELECT path, mime FROM details WHERE path NOT NULL AND mime IS NOT NULL;", *sql_dir = "SELECT path, mime FROM details WHERE path NOT NULL AND mime IS NULL;";
+	int ret;
+
+	DPRINTF(E_INFO, L_SCANNER, "Starting rescan\n");
+
+	/* Find and remove any dead directory links */
+	ret = sqlite3_exec(db, sql_dir, cb_orphans, NULL, &zErrMsg);
+	if (ret != SQLITE_OK)
+	{
+		DPRINTF(E_MAXDEBUG, L_SCANNER, "SQL error: %s\nBAD SQL: %s\n", zErrMsg, sql_dir);
+		sqlite3_free(zErrMsg);
+	}
+
+	/* Find and remove any dead file links */
+	ret = sqlite3_exec(db, sql_files, cb_orphans, NULL, &zErrMsg);
+	if (ret != SQLITE_OK)
+	{
+		DPRINTF(E_MAXDEBUG, L_SCANNER, "SQL error: %s\nBAD SQL: %s\n", zErrMsg, sql_files);
+		sqlite3_free(zErrMsg);
+	}
+
+	/* Rescan media_paths for new and/or modified files */
+	for (media_path = media_dirs; media_path != NULL; media_path = media_path->next)
+	{
+		strncpyt(path, media_path->path, sizeof(path));
+		strncpyt(buf, media_path->path, sizeof(buf));
+		esc_name = escape_tag(basename(buf), 1);
+		inotify_insert_directory(0, esc_name, path);
+		free(esc_name);
+	}
+	DPRINTF(E_INFO, L_SCANNER, "Rescan completed\n");
+}
+/* end rescan functions */
+
 void
 start_scanner()
 {
@@ -892,12 +1265,17 @@ start_scanner()
 
 	if (setpriority(PRIO_PROCESS, 0, 15) == -1)
 		DPRINTF(E_WARN, L_INOTIFY,  "Failed to reduce scanner thread priority\n");
-	_notify_start();
 
 	setlocale(LC_COLLATE, "");
 
 	av_register_all();
 	av_log_set_level(AV_LOG_PANIC);
+	if (rescan_db)
+	{
+		start_rescan();
+		return;
+	}
+	_notify_start();
 	for( media_path = media_dirs; media_path != NULL; media_path = media_path->next )
 	{
 		int64_t id;

@@ -8,7 +8,7 @@
 <meta HTTP-EQUIV="Expires" CONTENT="-1">
 <link rel="shortcut icon" href="images/favicon.png">
 <link rel="icon" href="images/favicon.png">
-<title><#Web_Title#> - <#menu3#></title>
+<title><#Web_Title#> - AiCloud 2.0</title>
 <link rel="stylesheet" type="text/css" href="index_style.css"> 
 <link rel="stylesheet" type="text/css" href="form_style.css">
 <script type="text/javascript" src="/state.js"></script>
@@ -37,11 +37,6 @@ function initial(){
 
 	if(!rrsut_support)
 		document.getElementById("rrsLink").style.display = "none";
-		
-	if(sw_mode == 2 || sw_mode == 3 || sw_mode == 4){
-		document.getElementById("smart_sync_link").style.display = "none";
-		document.getElementById("rrsLink").style.display = "none";
-	}	
 
 	if(aicloudipk_support){
 		document.form.action_script.value = "restart_setting_webdav";

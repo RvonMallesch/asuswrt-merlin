@@ -1,6 +1,6 @@
 /* Copyright (c) 2001-2003, Roger Dingledine.
  * Copyright (c) 2004-2006, Roger Dingledine, Nick Mathewson.
- * Copyright (c) 2007-2013, The Tor Project, Inc. */
+ * Copyright (c) 2007-2016, The Tor Project, Inc. */
 /* See LICENSE for licensing information */
 
 #ifndef TOR_TEST_H
@@ -22,25 +22,6 @@
 #define PRETTY_FUNCTION ""
 #endif
 
-#define test_fail_msg(msg) TT_DIE((msg))
-
-#define test_fail() test_fail_msg("Assertion failed.")
-
-#define test_assert(expr) tt_assert(expr)
-
-#define test_eq(expr1, expr2) tt_int_op((expr1), ==, (expr2))
-#define test_eq_ptr(expr1, expr2) tt_ptr_op((expr1), ==, (expr2))
-#define test_neq(expr1, expr2) tt_int_op((expr1), !=, (expr2))
-#define test_neq_ptr(expr1, expr2) tt_ptr_op((expr1), !=, (expr2))
-#define test_streq(expr1, expr2) tt_str_op((expr1), ==, (expr2))
-#define test_strneq(expr1, expr2) tt_str_op((expr1), !=, (expr2))
-
-#define test_mem_op(expr1, op, expr2, len)                              \
-  tt_mem_op((expr1), op, (expr2), (len))
-
-#define test_memeq(expr1, expr2, len) test_mem_op((expr1), ==, (expr2), len)
-#define test_memneq(expr1, expr2, len) test_mem_op((expr1), !=, (expr2), len)
-
 /* As test_mem_op, but decodes 'hex' before comparing.  There must be a
  * local char* variable called mem_op_hex_tmp for this to work. */
 #define test_mem_op_hex(expr1, op, hex)                                 \
@@ -50,14 +31,23 @@
   mem_op_hex_tmp = tor_malloc(length/2);                                \
   tor_assert((length&1)==0);                                            \
   base16_decode(mem_op_hex_tmp, length/2, hex, length);                 \
-  test_mem_op(expr1, op, mem_op_hex_tmp, length/2);                     \
+  tt_mem_op(expr1, op, mem_op_hex_tmp, length/2);                       \
   STMT_END
 
-#define test_memeq_hex(expr1, hex) test_mem_op_hex(expr1, ==, hex)
+#define test_memeq_hex(expr1, hex) test_mem_op_hex(expr1, OP_EQ, hex)
 
 #define tt_double_op(a,op,b)                                            \
-  tt_assert_test_type(a,b,#a" "#op" "#b,double,(val1_ op val2_),"%f",   \
+  tt_assert_test_type(a,b,#a" "#op" "#b,double,(val1_ op val2_),"%g",   \
                       TT_EXIT_TEST_FUNCTION)
+
+/* Declare "double equal" in a sneaky way, so compiler won't complain about
+ * comparing floats with == or !=.  Of course, only do this if you know what
+ * you're doing. */
+#define tt_double_eq(a,b)     \
+  STMT_BEGIN                  \
+  tt_double_op((a), >=, (b)); \
+  tt_double_op((a), <=, (b)); \
+  STMT_END
 
 #ifdef _MSC_VER
 #define U64_PRINTF_TYPE uint64_t
@@ -83,10 +73,8 @@
     {print_ = (I64_PRINTF_TYPE) value_;}, {}, TT_EXIT_TEST_FUNCTION)
 
 const char *get_fname(const char *name);
-crypto_pk_t *pk_generate(int idx);
-
-void legacy_test_helper(void *data);
-extern const struct testcase_setup_t legacy_setup;
+const char *get_fname_rnd(const char *name);
+struct crypto_pk_t *pk_generate(int idx);
 
 #define US2_CONCAT_2__(a, b) a ## __ ## b
 #define US_CONCAT_2__(a, b) a ## _ ## b
@@ -176,9 +164,90 @@ extern const struct testcase_setup_t legacy_setup;
 
 #define CALLED(mock_name) US_CONCAT_2_(NS(mock_name), called)
 #define NS_DECL(retval, mock_fn, args) \
+    extern int CALLED(mock_fn);        \
     static retval NS(mock_fn) args; int CALLED(mock_fn) = 0
 #define NS_MOCK(name) MOCK(name, NS(name))
 #define NS_UNMOCK(name) UNMOCK(name)
+
+extern const struct testcase_setup_t passthrough_setup;
+extern const struct testcase_setup_t ed25519_test_setup;
+
+extern struct testcase_t accounting_tests[];
+extern struct testcase_t addr_tests[];
+extern struct testcase_t address_tests[];
+extern struct testcase_t buffer_tests[];
+extern struct testcase_t cell_format_tests[];
+extern struct testcase_t cell_queue_tests[];
+extern struct testcase_t channel_tests[];
+extern struct testcase_t channeltls_tests[];
+extern struct testcase_t checkdir_tests[];
+extern struct testcase_t circuitlist_tests[];
+extern struct testcase_t circuitmux_tests[];
+extern struct testcase_t compat_libevent_tests[];
+extern struct testcase_t config_tests[];
+extern struct testcase_t connection_tests[];
+extern struct testcase_t container_tests[];
+extern struct testcase_t controller_tests[];
+extern struct testcase_t controller_event_tests[];
+extern struct testcase_t crypto_tests[];
+extern struct testcase_t dir_tests[];
+extern struct testcase_t dir_handle_get_tests[];
+extern struct testcase_t entryconn_tests[];
+extern struct testcase_t entrynodes_tests[];
+extern struct testcase_t guardfraction_tests[];
+extern struct testcase_t extorport_tests[];
+extern struct testcase_t hs_tests[];
+extern struct testcase_t introduce_tests[];
+extern struct testcase_t keypin_tests[];
+extern struct testcase_t link_handshake_tests[];
+extern struct testcase_t logging_tests[];
+extern struct testcase_t microdesc_tests[];
+extern struct testcase_t nodelist_tests[];
+extern struct testcase_t oom_tests[];
+extern struct testcase_t oos_tests[];
+extern struct testcase_t options_tests[];
+extern struct testcase_t policy_tests[];
+extern struct testcase_t procmon_tests[];
+extern struct testcase_t protover_tests[];
+extern struct testcase_t pubsub_tests[];
+extern struct testcase_t pt_tests[];
+extern struct testcase_t relay_tests[];
+extern struct testcase_t relaycell_tests[];
+extern struct testcase_t rend_cache_tests[];
+extern struct testcase_t replaycache_tests[];
+extern struct testcase_t router_tests[];
+extern struct testcase_t routerkeys_tests[];
+extern struct testcase_t routerlist_tests[];
+extern struct testcase_t routerset_tests[];
+extern struct testcase_t scheduler_tests[];
+extern struct testcase_t socks_tests[];
+extern struct testcase_t status_tests[];
+extern struct testcase_t thread_tests[];
+extern struct testcase_t tortls_tests[];
+extern struct testcase_t util_tests[];
+extern struct testcase_t util_format_tests[];
+extern struct testcase_t util_process_tests[];
+extern struct testcase_t dns_tests[];
+extern struct testcase_t handle_tests[];
+extern struct testcase_t sr_tests[];
+
+extern struct testcase_t slow_crypto_tests[];
+extern struct testcase_t slow_util_tests[];
+
+extern struct testgroup_t testgroups[];
+
+extern const char AUTHORITY_CERT_1[];
+extern const char AUTHORITY_SIGNKEY_1[];
+extern const char AUTHORITY_SIGNKEY_A_DIGEST[];
+extern const char AUTHORITY_SIGNKEY_A_DIGEST256[];
+extern const char AUTHORITY_CERT_2[];
+extern const char AUTHORITY_SIGNKEY_2[];
+extern const char AUTHORITY_SIGNKEY_B_DIGEST[];
+extern const char AUTHORITY_SIGNKEY_B_DIGEST256[];
+extern const char AUTHORITY_CERT_3[];
+extern const char AUTHORITY_SIGNKEY_3[];
+extern const char AUTHORITY_SIGNKEY_C_DIGEST[];
+extern const char AUTHORITY_SIGNKEY_C_DIGEST256[];
 
 #endif
 

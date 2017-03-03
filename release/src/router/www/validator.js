@@ -524,7 +524,22 @@ var validator = {
 			}
 			
 			return true;
-		}	
+		}
+		else if(keyPressed == 47){
+			j = 0;
+			
+			for(i = 0; i < o.value.length; i++){
+				if(o.value.charAt(i) == '.'){
+					j++;
+				}
+			}
+			
+			if( j < 3){
+				return false;
+			}
+			
+			return true;
+		}
 		return false;
 	},
 
@@ -798,20 +813,20 @@ var validator = {
 				v4 = num;
 			
 			return true;
-		}	
+		}
 	},
 
-	ipAddrFinal: function(o, v){
+	ipAddrFinal: function(o, v, noAlert){
 		var num = -1;
 		var pos = 0;
-		var v1, v2, v3, v4;	
+		var v1, v2, v3, v4;
 		if(o.value.length == 0){
 			if(v == 'dhcp_start' || v == 'dhcp_end' ||
 					v == 'wan_ipaddr_x' ||
 					v == 'dhcp1_start' || v=='dhcp1_end' ||
 					v == 'lan_ipaddr' || v=='lan_netmask' ||
 					v=='lan1_ipaddr' || v=='lan1_netmask' ||
-					v == 'wl_radius_ipaddr' || v == 'hs_radius_ipaddr') {	
+					v == 'wl_radius_ipaddr' || v == 'hs_radius_ipaddr') {
 				alert("<#JS_fieldblank#>");
 				
 				if(v == 'wan_ipaddr_x'){
@@ -856,13 +871,17 @@ var validator = {
 			}
 			else{
 				if(num < 0 || num > 255 || c != '.'){
-					alert(o.value+" <#JS_validip#>");
-					
-					o.value = "";
-					o.focus();
-					o.select();
-					
-					return false;
+					if(v == 'wl_radius_ipaddr' && typeof(noAlert) != undefined && noAlert == 1){
+						return false;
+					}
+					else{
+						alert(o.value+" <#JS_validip#>");
+						
+						o.value = "";
+						o.focus();
+						o.select();
+						return false;
+					}
 				}
 				
 				if(pos == 0)
@@ -878,12 +897,16 @@ var validator = {
 		}
 		
 		if(pos!=3 || num<0 || num>255){
-			alert(o.value + " <#JS_validip#>");
-			o.value = "";
-			o.focus();
-			o.select();
-			
-			return false;
+			if(v == 'wl_radius_ipaddr' && typeof(noAlert) != undefined && noAlert == 1){
+				return false;
+			}
+			else{
+				alert(o.value + " <#JS_validip#>");
+				o.value = "";
+				o.focus();
+				o.select();
+				return false;
+			}
 		}
 		else
 			v4 = num;
@@ -896,13 +919,17 @@ var validator = {
 				v == 'dhcp_dns1_x' || v == 'dhcp_gateway_x' || v == 'dhcp_wins_x' ||
 				v == 'sip_server'){
 			if((v!='wan_ipaddr_x')&& (v1==255||v4==255||v1==0||v4==0||v1==127||v1==224)){
-				alert(o.value + " <#JS_validip#>");
-				
-				o.value = "";
-				o.focus();
-				o.select();
-				
-				return false;
+				if(v == 'wl_radius_ipaddr' && typeof(noAlert) != undefined && noAlert == 1){
+					return false;
+				}
+				else{
+					alert(o.value + " <#JS_validip#>");
+					
+					o.value = "";
+					o.focus();
+					o.select();
+					return false;
+				}
 			}
 			
 			if(sw_mode == "2" || sw_mode == "3")	// variables are defined in state.js
@@ -1761,7 +1788,7 @@ var validator = {
 					obj.select();
 					return false;
 				}else{
-					if(obj.value.split("/")[1] == "" || obj.value.split("/")[1] == 0 || obj.value.split("/")[1] > 30){
+					if(obj.value.split("/")[1] == "" || obj.value.split("/")[1] == 0 || obj.value.split("/")[1] > 32){
 						alert(obj.value + " <#JS_validip#>");
 						obj.value = "";
 						obj.focus();

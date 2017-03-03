@@ -1,10 +1,12 @@
-/* Copyright (c) 2012-2013, The Tor Project, Inc. */
+/* Copyright (c) 2012-2016, The Tor Project, Inc. */
 /* See LICENSE for licensing information */
 
 #include "orconfig.h"
 #include <stdio.h>
 #include <stdlib.h>
 
+/* To prevent 'assert' from going away. */
+#undef TOR_COVERAGE
 #include "or.h"
 #include "util.h"
 #include "backtrace.h"
@@ -26,11 +28,19 @@ int a_tangled_web(int x) NOINLINE;
 int we_weave(int x) NOINLINE;
 static void abort_handler(int s) NORETURN;
 
+#ifdef HAVE_CFLAG_WNULL_DEREFERENCE
+DISABLE_GCC_WARNING(null-dereference)
+#endif
 int
 crash(int x)
 {
   if (crashtype == 0) {
+#if defined(__clang_analyzer__) || defined(__COVERITY__)
+    tor_assert(1 == 0); /* Avert your eyes, clangalyzer and coverity!  You
+                         * don't need to see us dereference NULL. */
+#else
     *(volatile int *)0 = 0;
+#endif
   } else if (crashtype == 1) {
     tor_assert(1 == 0);
   } else if (crashtype == -1) {
@@ -40,6 +50,9 @@ crash(int x)
   crashtype *= x;
   return crashtype;
 }
+#ifdef HAVE_CFLAG_WNULL_DEREFERENCE
+ENABLE_GCC_WARNING(null-dereference)
+#endif
 
 int
 oh_what(int x)
@@ -77,21 +90,30 @@ main(int argc, char **argv)
 
   if (argc < 2) {
     puts("I take an argument. It should be \"assert\" or \"crash\" or "
-         "\"none\"");
+         "\"backtraces\" or \"none\"");
     return 1;
   }
+
+#if !(defined(HAVE_EXECINFO_H) && defined(HAVE_BACKTRACE) && \
+   defined(HAVE_BACKTRACE_SYMBOLS_FD) && defined(HAVE_SIGACTION))
+    puts("Backtrace reporting is not supported on this platform");
+    return 77;
+#endif
+
   if (!strcmp(argv[1], "assert")) {
     crashtype = 1;
   } else if (!strcmp(argv[1], "crash")) {
     crashtype = 0;
   } else if (!strcmp(argv[1], "none")) {
     crashtype = -1;
+  } else if (!strcmp(argv[1], "backtraces")) {
+    return 0;
   } else {
     puts("Argument should be \"assert\" or \"crash\" or \"none\"");
     return 1;
   }
 
-  init_logging();
+  init_logging(1);
   set_log_severity_config(LOG_WARN, LOG_ERR, &severity);
   add_stream_log(&severity, "stdout", STDOUT_FILENO);
   tor_log_update_sigsafe_err_fds();
@@ -103,6 +125,7 @@ main(int argc, char **argv)
   printf("%d\n", we_weave(2));
 
   clean_up_backtrace_handler();
+  logs_free_all();
 
   return 0;
 }

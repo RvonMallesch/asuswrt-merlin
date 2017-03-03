@@ -1,7 +1,7 @@
 /*
  * NVRAM variable manipulation
  *
- * Copyright (C) 2012, Broadcom Corporation. All Rights Reserved.
+ * Copyright (C) 2015, Broadcom Corporation. All Rights Reserved.
  * 
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -15,7 +15,7 @@
  * OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
  * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: bcmnvram.h 371897 2012-11-29 20:19:17Z $
+ * $Id: bcmnvram.h 419467 2013-08-21 09:19:48Z $
  */
 
 #ifndef _bcmnvram_h_
@@ -44,6 +44,15 @@ struct nvram_tuple {
  * Get default value for an NVRAM variable
  */
 extern char *nvram_default_get(const char *name);
+/*
+ * validate/restore all per-interface related variables
+ */
+extern void nvram_validate_all(char *prefix, bool restore);
+
+/*
+ * restore specific per-interface variable
+ */
+extern void nvram_restore_var(char *prefix, char *name);
 
 /*
  * Initialize NVRAM access. May be unnecessary or undefined on certain
@@ -51,6 +60,14 @@ extern char *nvram_default_get(const char *name);
  */
 extern int nvram_init(void *sih);
 extern int nvram_deinit(void *sih);
+
+#if defined(_CFE_) && defined(BCM_DEVINFO)
+extern char *flashdrv_nvram;
+extern char *devinfo_flashdrv_nvram;
+extern int devinfo_nvram_init(void *sih);
+extern int devinfo_nvram_sync(void);
+extern void _nvram_hash_select(int idx);
+#endif
 
 /*
  * Append a chunk of nvram variables to the global list
@@ -195,20 +212,12 @@ extern int nvram_space;
 #define NVRAM_VERSION		1
 #define NVRAM_HEADER_SIZE	20
 /* This definition is for precommit staging, and will be removed */
-#if (defined(RTCONFIG_NVRAM_64K) || defined(CONFIG_NVRAM_64K))
 #define NVRAM_SPACE		0x10000
-#else
-#define NVRAM_SPACE		0x8000
-#endif
 /* For CFE builds this gets passed in thru the makefile */
 #ifndef MAX_NVRAM_SPACE
 #define MAX_NVRAM_SPACE		0x10000
 #endif
-#if (defined(RTCONFIG_NVRAM_64K) || defined(CONFIG_NVRAM_64K))
 #define DEF_NVRAM_SPACE		0x10000
-#else
-#define DEF_NVRAM_SPACE		0x8000
-#endif
 #define ROM_ENVRAM_SPACE	0x1000
 #define NVRAM_LZMA_MAGIC	0x4c5a4d41	/* 'LZMA' */
 

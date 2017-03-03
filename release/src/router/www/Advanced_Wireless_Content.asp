@@ -28,10 +28,15 @@ var wl_unit_value = '<% nvram_get("wl_unit"); %>';
 var wl_subunit_value = '<% nvram_get("wl_subunit"); %>';
 var wlc_band_value = '<% nvram_get("wlc_band"); %>';
 var cur_control_channel = [<% wl_control_channel(); %>][0];
+
 function initial(){
 	show_menu();	
 
-	if((sw_mode == 2 || sw_mode == 4) && wl_unit_value == wlc_band_value && wl_subunit_value != '1'){
+	if((isSwMode("re") || isSwMode("mb")) && (wl_unit_value == wlc_band_value) && wl_subunit_value != '1' && !concurrep_support){
+		_change_wl_unit(wl_unit_value);
+	}
+
+	if(isSwMode("re") && concurrep_support && wl_subunit_value != '1'){
 		_change_wl_unit(wl_unit_value);
 	}
 
@@ -106,7 +111,7 @@ function initial(){
 
 	handle_11ac_80MHz();
 
-	if(sw_mode == 2 || sw_mode == 4)
+	if(isSwMode("re") || isSwMode("mb"))
 		document.form.wl_subunit.value = (wl_unit_value == wlc_band_value) ? 1 : -1;	
 	
 	document.getElementById('WPS_hideSSID_hint').innerHTML = "<#WPS_hideSSID_hint#>";	
@@ -114,9 +119,15 @@ function initial(){
 		document.getElementById('WPS_hideSSID_hint').style.display = "";	
 	}
 	
-	if(!Rawifi_support && !Qcawifi_support && document.form.wl_channel.value  == '0'){
+	if(!Rawifi_support && document.form.wl_channel.value  == '0'){
 		document.getElementById("auto_channel").style.display = "";
 		document.getElementById("auto_channel").innerHTML = "Current control channel: "+cur_control_channel[wl_unit_value];
+	}
+
+	if(concurrep_support && isSwMode("re")){
+		inputCtrl(document.form.wl_nmode_x, 0);
+		document.form.wl_subunit.disabled = false;
+		document.form.wl_subunit.value = 1;
 	}
 }
 
@@ -291,8 +302,11 @@ function applyRule(){
 		inputCtrl(document.form.wl_phrase_x, 1);
 		inputCtrl(document.form.wl_wpa_gtk_rekey, 1);*/
 		
-		if(sw_mode == 2 || sw_mode == 4)
+		if(isSwMode("re") || isSwMode("mb"))
 			document.form.action_wait.value = "5";
+
+		if (Qcawifi_support)
+			document.form.action_wait.value = "30";
 
 		document.form.submit();
 	}
@@ -325,7 +339,7 @@ function validForm(){
 		//confirm common string combination	#JS_common_passwd#
 		var is_common_string = check_common_string(document.form.wl_wpa_psk.value, "wpa_key");
 		if(is_common_string){
-			if(confirm("<#JS_common_passwd#>")){
+			if(!confirm("<#JS_common_passwd#>")){
 				document.form.wl_wpa_psk.focus();
 				document.form.wl_wpa_psk.select();
 				return false;	
@@ -365,10 +379,14 @@ function disableAdvFn(){
 }
 
 function _change_wl_unit(val){
-	if((sw_mode == 2 || sw_mode == 4) && val == wlc_band_value)
+	if(!concurrep_support && (isSwMode("re") || isSwMode("mb")) && val == wlc_band_value)
 		document.form.wl_subunit.value = 1;
 	else
 		document.form.wl_subunit.value = -1;
+
+	if(concurrep_support && (isSwMode("re") || isSwMode("mb")))
+		document.form.wl_subunit.value = 1;
+
 	change_wl_unit();
 }
 
@@ -652,7 +670,7 @@ function high_power_auto_channel(){
 			  	<tr>
 					<th><a class="hintstyle" href="javascript:void(0);" onClick="openHint(0, 7);"><#WLANConfig11b_x_PSKKey_itemname#></a></th>
 					<td>
-						<input id="wl_wpa_psk" name="wl_wpa_psk" maxlength="64" class="input_32_table" type="password" autocapitalization="off" onBlur="switchType(this, false);" onFocus="switchType(this, true);" value="<% nvram_get("wl_wpa_psk"); %>" autocorrect="off" autocapitalize="off">
+						<input id="wl_wpa_psk" name="wl_wpa_psk" maxlength="64" class="input_32_table" type="password" autocapitalization="off" onBlur="switchType(this, false);" onFocus="switchType(this, true);" value="<% nvram_get("wl_wpa_psk"); %>" autocomplete="new-password" autocorrect="off" autocapitalize="off">
 					</td>
 			  	</tr>
 			  		  

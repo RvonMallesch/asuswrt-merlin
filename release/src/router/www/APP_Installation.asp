@@ -17,6 +17,7 @@
 <script type="text/javascript" src="/help.js"></script>
 <script type="text/javascript" src="/disk_functions.js"></script>
 <script type="text/javascript" src="/js/jquery.js"></script>
+<script type="text/javascript" src="/disk_functions.js"></script>
 <style>
 #Aidisk_png{
   background: url(images/New_ui/USBExt/APP_list.png);
@@ -73,14 +74,9 @@
 }
 </style>
 <script>
-
-
 var apps_array = <% apps_info("asus"); %>;
-
 <% apps_state_info(); %>
-
 var apps_download_percent_done = 0;
-
 <% apps_action(); %> //trigger apps_action.
 
 var stoppullstate = 0;
@@ -140,7 +136,7 @@ function initial(){
 		(apps_state_switch == 5 || apps_state_switch == "") && 
 		(apps_state_autorun == 4 || apps_state_autorun == "") && 
 		(apps_state_install == 5 || apps_state_install == "")){
-		show_apps();
+		setTimeout('show_apps();', 500);
 	}
 	else{
 		setTimeout("update_appstate();", 2000);
@@ -537,10 +533,9 @@ function show_apps(){
 		if(apps_array[i][0] != "downloadmaster" && apps_array[i][0] != "mediaserver" && apps_array[i][0] != "mediaserver2" && apps_array[i][0] != "aicloud") // discard unneeded apps
 			continue;
 		else if((apps_array[i][0] == "downloadmaster" || apps_array[i][0] == "mediaserver" || apps_array[i][0] == "mediaserver2" || apps_array[i][0] == "aicloud") && apps_array[i][3] == "yes" && apps_array[i][4] == "yes"){
-			if(location.host.split(":").length > 1)
-				apps_array[i][6] = "http://" + location.host.split(":")[0] + ":" + dm_http_port;
-			else
-				apps_array[i][6] = "http://" + location.host + ":" + dm_http_port;
+
+			var header_info = [<% get_header_info(); %>];
+			apps_array[i][6] = "http://" + header_info[0].host + ":" + dm_http_port;
 
 			if(apps_array[i][0] == "aicloud") // append URL
 				apps_array[i][6] = "/cloud_main.asp";
@@ -636,30 +631,37 @@ function show_apps(){
 
 		// apps_action
 		if(apps_array[i][3] == "yes"){ //installed
-			htmlcode += '<span class="app_action" onclick="apps_form(\'remove\',\''+ apps_array[i][0] +'\',\'\');">Uninstall</span>\n';
+			htmlcode += '<span class="app_action" onclick="apps_form(\'remove\',\''+ apps_array[i][0] +'\',\'\');">Uninstall</span>\n';	/* untranslated */
 			if(apps_array[i][4] == "yes")		//enable
-				htmlcode += '<span class="app_action" onclick="apps_form(\'enable\',\''+ apps_array[i][0] +'\',\'no\');">Disable</span>\n';
+				htmlcode += '<span class="app_action" onclick="apps_form(\'enable\',\''+ apps_array[i][0] +'\',\'no\');"><#WLANConfig11b_WirelessCtrl_buttonname#></span>\n';
 			else
-				htmlcode += '<span class="app_action" onclick="apps_form(\'enable\',\''+ apps_array[i][0] +'\',\'yes\');">Enable</span>\n';
-		}
-		else{
-			if(apps_array[i][0] == "downloadmaster" || apps_array[i][0] == "mediaserver" || apps_array[i][0] == "aicloud" || apps_array[i][0] == "mediaserver2")
-				htmlcode += '<span class="app_action" onclick="_appname=\''+apps_array[i][0]+'\';divdisplayctrl(\'none\', \'\', \'none\', \'none\');location.href=\'#\';">Install</span>\n';
-			else
-				htmlcode += '<span class="app_action" onclick="apps_form(\'install\',\''+ apps_array[i][0] +'\',\''+ partitions_array[i] +'\');">Install</span>\n';
-		}
+				htmlcode += '<span class="app_action" onclick="apps_form(\'enable\',\''+ apps_array[i][0] +'\',\'yes\');"><#WLANConfig11b_WirelessCtrl_button1name#></span>\n';
 
-		if(apps_array[i][0] == "downloadmaster"){
-			if(apps_array[i][3] == "yes"){
-				htmlcode += '<span class="app_action" onclick="divdisplayctrl(\'none\', \'none\', \'none\', \'\');">Help</span>\n';
+			if(sw_mode == 3 || document.getElementById("connect_status").className == "connectstatuson")
+				htmlcode += '<span class="app_action" onclick="apps_form(\'update\',\''+ apps_array[i][0] +'\',\'\');">Check update</span>\n';	/* untranslated */
+	
+			if(apps_array[i][0] == "downloadmaster"){
+				htmlcode += '<span class="app_action" onclick="divdisplayctrl(\'none\', \'none\', \'none\', \'\');"><#CTL_help#></span>\n';
+
+				cookie.set("dm_install", apps_array[i][3], 1000);
+				cookie.set("dm_enable", apps_array[i][4], 1000);
 			}
 
-			cookie.set("dm_install", apps_array[i][3], 1000);
-			cookie.set("dm_enable", apps_array[i][4], 1000);
-		}
+			if(	cookie.get("apps_last") == apps_array[i][0] &&
+					hasNewVer(apps_array[i]) && 
+					(sw_mode == 3 || document.getElementById("connect_status").className == "connectstatuson"))
+				htmlcode += '</div><div style="color:#FC0;margin-top:10px;"><span class="app_action" onclick="apps_form(\'upgrade\',\''+ apps_array[i][0] +'\',\'\');"><#update_available#></span>\n';	
+			else if(cookie.get("apps_last") == apps_array[i][0])
+				htmlcode += "</div><div style=\"color:#FC0;margin-top:10px;margin-left:10px;\"><span class=\"app_no_action\" onclick=\"\">The version is up-to-date.</span>\n";	/* untranslated */				                   
 
-		if(hasNewVer(apps_array[i]))
-			htmlcode += '</div><div style="color:#FC0;margin-top:10px;"><span class="app_action" onclick="apps_form(\'upgrade\',\''+ apps_array[i][0] +'\',\'\');"><#update_available#></span>\n';
+		}
+		else{
+			
+			if(apps_array[i][0] == "downloadmaster" || apps_array[i][0] == "mediaserver" || apps_array[i][0] == "aicloud" || apps_array[i][0] == "mediaserver2")
+				htmlcode += '<span class="app_action" onclick="_appname=\''+apps_array[i][0]+'\';divdisplayctrl(\'none\', \'\', \'none\', \'none\');location.href=\'#\';">Install</span>\n';		/* untranslated */
+			else
+				htmlcode += '<span class="app_action" onclick="apps_form(\'install\',\''+ apps_array[i][0] +'\',\''+ partitions_array[i] +'\');">Install</span>\n';		/* untranslated */
+		}
 		
 		htmlcode += '</div><br/><br/></td></tr>\n';
 	
@@ -677,6 +679,7 @@ function show_apps(){
 	stoppullstate = 1;
 	calHeight(1);
 	cookie.set("hwaddr", '<% nvram_get("lan_hwaddr"); %>', 1000);
+	cookie.set("apps_last", "", 1000);
 }
 
 /* 
@@ -721,7 +724,7 @@ var hasNewVer = function(arr){
 
 var partitions_array = [];
 function show_partition(){
- 	require(['/require/modules/diskList.js'], function(diskList){
+ 	require(['/require/modules/diskList.js?hash=' + Math.random().toString()], function(diskList){
 		var htmlcode = "";
 		var mounted_partition = 0;
 		partitions_array = [];
@@ -776,14 +779,6 @@ function show_partition(){
 	});
 }
 
-function detectUSBStatusApp(){
- 	require(['/require/modules/diskList.js'], function(diskList){
-		setInterval(function(){
-			diskList.update(show_partition); 
-		}, 2000);
-	});
-}
-
 function apps_form(_act, _name, _flag){
 	cookie.set("apps_last", _name, 1000);
 
@@ -803,16 +798,14 @@ function divdisplayctrl(flag1, flag2, flag3, flag4){
 		document.getElementById("return_btn").style.display = "none";
 	}
 	else if(flag2 != "none"){ // partition list
-		detectUSBStatusApp();
-		show_partition();
+	 	setInterval(show_partition, 2000);
+		show_partition()
 		document.getElementById("return_btn").style.display = "";
 		calHeight(1);
 	}
 	else if(flag4 != "none"){ // help
-		if(location.host.split(":").length > 1)
-			var _quick_dmlink = "http://" + location.host.split(":")[0] + ":" + dm_http_port;
-		else
-			var _quick_dmlink = "http://" + location.host + ":" + dm_http_port;
+		var header_info = [<% get_header_info(); %>];
+		var _quick_dmlink = "http://" + header_info[0].host + ":" + dm_http_port;
 		
 		if(_dm_enable == "yes"){
 			document.getElementById("realLink").href = _quick_dmlink;
@@ -948,10 +941,10 @@ function go_modem_page(usb_unit_flag){
 								<a id="faq" href="http://www.asus.com/support/FAQ/1009773/" target="_blank" style="text-decoration:underline;font-size:14px;font-weight:bolder;color:#FFF">Download Master FAQ</a>
 							</li>
 							<li style="margin-top:10px;">
-								<a id="faq2" href="http://www.asus.com/support/faq/114002/" target="_blank" style="text-decoration:underline;font-size:14px;font-weight:bolder;color:#FFF">Download Master Tool FAQ</a>
+								<a id="faq2" href="http://www.asus.com/support/FAQ/1016385/" target="_blank" style="text-decoration:underline;font-size:14px;font-weight:bolder;color:#FFF">Download Master Tool FAQ</a>
 							</li>
 							<li style="margin-top:10px;">
-								<a id="DMUtilityLink" href="http://dlcdnet.asus.com/pub/ASUS/wireless/ASUSWRT/DM2_2037.zip" style="text-decoration:underline;font-size:14px;font-weight:bolder;color:#FFF"><#DM_Download_Tool#></a>
+								<a id="DMUtilityLink" href="http://dlcdnet.asus.com/pub/ASUS/wireless/RT-AC5300/UT_Download_Master_2228_Win.zip" style="text-decoration:underline;font-size:14px;font-weight:bolder;color:#FFF"><#DM_Download_Tool#></a>
 							</li>
 						</ul>
 					</td>

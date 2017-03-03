@@ -200,7 +200,7 @@ ej_get_upnp_array(int eid, webs_t wp, int argc, char_t **argv)
 
 	ret += websWrite(wp, "var upnparray = [");
 
-	fp = fopen("/var/lib/misc/upnp.leases", "r");
+	fp = fopen("/tmp/upnp.leases", "r");
 	if (fp == NULL) {
 		ret += websWrite(wp, "[]];\n");
 		return ret;
@@ -214,7 +214,7 @@ ej_get_upnp_array(int eid, webs_t wp, int argc, char_t **argv)
 			"%15[^:]:"
 			"%5[^:]:"
 			"%14[^:]:"
-			"%200[^\n]",
+			"%199[^\n]",
 			proto, eport, iaddr, iport, timestamp, desc) < 6) continue;
 
 		if (str_escape_quotes(desc2, desc, sizeof(desc2)) == 0)
@@ -238,8 +238,8 @@ ej_get_vserver_array(int eid, webs_t wp, int argc, char_t **argv)
 	char *nat_argv[] = {"iptables", "-t", "nat", "-nxL", NULL};
 	char line[256], tmp[256];
 	char target[16], proto[16];
-	char src[sizeof("255.255.255.255")];
-	char dst[sizeof("255.255.255.255")];
+	char src[19];
+	char dst[19];
 	char *range, *host, *port, *ptr, *val;
 	int ret = 0;
 	char chain[16];
@@ -269,10 +269,10 @@ ej_get_vserver_array(int eid, webs_t wp, int argc, char_t **argv)
 		    "%15s%*[ \t]"		// target
 		    "%15s%*[ \t]"		// prot
 		    "%*s%*[ \t]"		// opt
-		    "%15[^/]/%*d%*[ \t]"	// source
+		    "%18s%*[ \t]"		// source
 		    "%15[^/]/%*d%*[ \t]"	// destination
 		    "%255[^\n]",		// options
-		    target, proto, src, dst, tmp) < 4) continue;
+		    target, proto, src, dst, tmp) < 5) continue;
 
 		/* TODO: add port trigger, portmap, etc support */
 		if (strcmp(target, "DNAT") != 0)
@@ -285,13 +285,11 @@ ej_get_vserver_array(int eid, webs_t wp, int argc, char_t **argv)
 		/* uppercase proto */
 		for (ptr = proto; *ptr; ptr++)
 			*ptr = toupper(*ptr);
-#ifdef NATSRC_SUPPORT
 		/* parse source */
-		if (strcmp(src, "0.0.0.0") == 0)
+		if (strcmp(src, "0.0.0.0/0") == 0)
 			strcpy(src, "ALL");
-#endif
 		/* parse destination */
-		if (strcmp(dst, "0.0.0.0") == 0)
+		if (strcmp(dst, "0.0.0.0/0") == 0)
 			strcpy(dst, "ALL");
 
 		/* parse options */
@@ -309,13 +307,9 @@ ej_get_vserver_array(int eid, webs_t wp, int argc, char_t **argv)
 		}
 
 		ret += websWrite(wp, "["
-#ifdef NATSRC_SUPPORT
 			"\"%s\", "
-#endif
 			"\"%s\", \"%s\", \"%s\", \"%s\", \"%s\", \"%s\"],\n",
-#ifdef NATSRC_SUPPORT
 			src,
-#endif
 			dst, proto, range, host, port ? : range, chain);
 	}
 	fclose(fp);
@@ -665,3 +659,109 @@ ej_lan_ipv6_network_array(int eid, webs_t wp, int argc, char_t **argv)
 }
 #endif
 
+
+int ej_tcclass_dump_array(int eid, webs_t wp, int argc, char_t **argv) {
+	FILE *fp;
+	int ret = 0;
+#if 0
+	int len = 0;
+#endif
+	char tmp[64];
+	char wan_ifname[12];
+
+	if (nvram_get_int("qos_enable") == 0) {
+		ret += websWrite(wp, "var tcdata_lan_array = [[]];\nvar tcdata_wan_array = [[]];\n");
+		return ret;
+	}
+
+	if (nvram_get_int("qos_type") == 1) {
+		system("tc -s class show dev br0 > /tmp/tcclass.txt");
+
+		ret += websWrite(wp, "var tcdata_lan_array = [\n");
+
+		fp = fopen("/tmp/tcclass.txt","r");
+		if (fp) {
+			ret += tcclass_dump(fp, wp);
+			fclose(fp);
+		} else {
+			ret += websWrite(wp, "[]];\n");
+		}
+		unlink("/tmp/tcclass.txt");
+
+#if 0	// tc classes don't seem to use this interface as would be expected
+		fp = fopen("/sys/module/bw_forward/parameters/dev_wan", "r");
+		if (fp) {
+			if (fgets(tmp, sizeof(tmp), fp) != NULL) {
+				len = strlen(tmp);
+				if (len && tmp[len-1] == '\n')
+					tmp[len-1] = '\0';
+			}
+			fclose(fp);
+		}
+		if (len)
+			strncpy(wan_ifname, tmp, sizeof(wan_ifname));
+		else
+#endif
+			strcpy(wan_ifname, "eth0");     // Default fallback
+
+	} else {
+		strncpy(wan_ifname, get_wan_ifname(wan_primary_ifunit()), sizeof (wan_ifname));
+	}
+
+	if (nvram_get_int("qos_type") != 2) {	// Must not be BW Limiter
+		snprintf(tmp, sizeof(tmp), "tc -s class show dev %s > /tmp/tcclass.txt", wan_ifname);
+		system(tmp);
+
+	        ret += websWrite(wp, "var tcdata_wan_array = [\n");
+
+	        fp = fopen("/tmp/tcclass.txt","r");
+	        if (fp) {
+	                ret += tcclass_dump(fp, wp);
+			fclose(fp);
+		} else {
+			ret += websWrite(wp, "[]];\n");
+	        }
+		unlink("/tmp/tcclass.txt");
+	}
+	return ret;
+}
+
+
+int tcclass_dump(FILE *fp, webs_t wp) {
+	char buf[256], ratebps[16], ratepps[16];
+	int tcclass = 0;
+	int stage = 0;
+	unsigned long long traffic;
+	int ret = 0;
+
+	while (fgets(buf, sizeof(buf) , fp)) {
+		switch (stage) {
+			case 0:	// class
+				if (sscanf(buf, "class htb 1:%d %*s", &tcclass) == 1) {
+					// Skip roots 1:1 and 1:2, and skip 1:60 in tQoS since it's BCM's download class
+					if ( (tcclass < 10) || ((nvram_get_int("qos_type") == 0) && (tcclass == 60))) {
+						continue;
+					}
+					ret += websWrite(wp, "[\"%d\",", tcclass);
+					stage = 1;
+				}
+				break;
+			case 1: // Total data
+				if (sscanf(buf, " Sent %llu bytes %*d pkt %*s)", &traffic) == 1) {
+					ret += websWrite(wp, " \"%llu\",", traffic);
+					stage = 2;
+				}
+				break;
+			case 2: // Rates
+				if (sscanf(buf, " rate %15s %15s backlog %*s", ratebps, ratepps) == 2) {
+					ret += websWrite(wp, " \"%s\", \"%s\"],\n", ratebps, ratepps);
+					stage = 0;
+				}
+				break;
+			default:
+				break;
+		}
+	}
+	ret += websWrite(wp, "[]];\n");
+	return ret;
+}

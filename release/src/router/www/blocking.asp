@@ -125,9 +125,11 @@ li{
 	background-color: transparent;
 }
 .tm_logo{
-	background:url('images/New_ui/tm_logo_1.png');
-	width:268px;
-	height:48px;
+	background:url('images/New_ui/tm_logo_1.png') no-repeat;
+	width:487px;
+	height:90px;
+	background-size: 80%;
+	margin-left: -20px;
 }
 .desc_info{
 	font-weight:bold;
@@ -204,7 +206,7 @@ li{
 		margin: 10px 0;
 	}
 	.tm_logo{
-		width: 225px;
+		width: 400px;
 		background-repeat: no-repeat;
 		background-size: 100%;
 	}
@@ -214,11 +216,11 @@ li{
 var bwdpi_support = ('<% nvram_get("rc_support"); %>'.search('bwdpi') == -1) ? false : true;
 var mac_parameter = '<% get_parameter("mac"); %>'.toUpperCase();
 var casenum = '<% get_parameter("cat_id"); %>';
+var flag = '<% get_parameter("flag"); %>';
 var block_info = '<% bwdpi_redirect_info(); %>';
 if(block_info != "")
 	block_info = JSON.parse(block_info);
-var client_list_array = '<% get_client_detail_info(); %>';
-var custom_name = decodeURIComponent('<% nvram_char_to_ascii("", "custom_clientlist"); %>').replace(/&#62/g, ">").replace(/&#60/g, "<");
+
 var category_info = [["Parental Controls", "1", "<#AiProtection_filter_Adult#>", "<#AiProtection_filter_Adult1#>", "Sites with profane or vulgar content generally considered inappropriate for minors; includes sites that offer erotic content or ads for sexual services, but excludes sites with sexually explicit images."],
 				     ["Parental Controls", "2", "<#AiProtection_filter_Adult#>", "<#AiProtection_filter_Adult1#>", "Sites that provide information about or software for sharing and transferring files related to child pornography."],
 				     ["Parental Controls", "3", "<#AiProtection_filter_Adult#>", "<#AiProtection_filter_Adult1#>", "Sites with sexually explicit imagery designed for sexual arousal, including sites that offer sexual services."],
@@ -281,10 +283,11 @@ function initial(){
 }
 
 function get_target_info(){
+/*
 	var client_list_row = client_list_array.split('<');
 	var custom_name_row = custom_name.split('<');
 	var match_flag = 0;
-	
+
 	for(i=1;i<custom_name_row.length;i++){
 		var custom_name_col = custom_name_row[i].split('>');
 		if(custom_name_col[1] == block_info[0] || custom_name_col[1] == mac_parameter){
@@ -301,8 +304,9 @@ function get_target_info(){
 			}
 		}
 	}
-
+*/
 	if(casenum != ""){		//for AiProtection
+		target_info.name = block_info[0];
 		target_info.mac = block_info[0];
 		target_info.url = block_info[1];
 		target_info.category_id = block_info[2];
@@ -370,7 +374,7 @@ function show_information(){
 	else if(target_info.category_type == "Home Protection"){
 		code_title = "<div class='er_title' style='height:auto;'>Warning! The website contains malware. Visiting this site may harm your computer</div>"//untranslated string
 		code_suggestion = "<ul>";
-		code_suggestion += "If you are a manager and want to disable this protection, please go to Home Protection for configuration";//untranslated string
+		code_suggestion += "<li>If you are a manager and consider to disable this protection, please go to Home Protection page for configuration.</li>";//untranslated string
 		code_suggestion += "</ul>";
 		document.getElementById('tm_block').style.display = "";
 		$("#go_btn").click(function(){
@@ -378,6 +382,24 @@ function show_information(){
 		});
 		document.getElementById('go_btn').style.display = "";
 	}
+	else if(flag != ""){
+		code_title = "<div class='er_title' style='height:auto;'>You failed to access to the web page that you want to view.</div>"//untranslated string
+		document.getElementById('main_reason').innerHTML = "Reason for failed connection";		
+		code = "";
+		code += "<div>The total traffic reaches limited. Internet connection was cut off temporarily.</div>";
+	
+		document.getElementById('detail_info').innerHTML = code;
+
+		code_suggestion = "<ul>";
+		code_suggestion += "<li><span>Disable cut-off Internet function in traffic limiter to restore Internet connection.</span></li>";//untranslated string
+		code_suggestion += "<li><span>Raise max value of cut-off Internet.</span></li>";		//untranslated string
+		code_suggestion += "</ul>";		
+		
+		$("#go_btn").click(function(){
+			location.href = "AdaptiveQoS_TrafficLimiter.asp";
+		});
+		document.getElementById('go_btn').style.display = "";		
+	}	
 	else{		//for Parental Control(Time Scheduling)
 		code_title = "<div class='er_title' style='height:auto;'>Warning! The device can't access the Internet now.</div>"
 		code_suggestion = "<ul>";
@@ -411,7 +433,7 @@ function show_information(){
 		</div>		
 		<div class="prod_madelName"><#Web_Title2#></div>
 		
-		<div class="p1 title_gap">Detailed informations:</div><!--untranslated string-->
+		<div id="main_reason" class="p1 title_gap">Detailed informations:</div><!--untranslated string-->
 		<div ></div>	
 		<div>
 			<div class="p1 title_gap"></div>
@@ -427,7 +449,7 @@ function show_information(){
 				<div id="case_content"></div>
 				<div id="suggestion"></div>
 				<div id="tm_block" style="display:none">
-					<div>For your client side advanced internet security protection. Trend Micro offer you more advanced home security solution. Please <a href="http://www.trendmicro.com" target="_blank">visit the site</a> for free trial or online scan service.</div>
+					<div>For more completed security protection for your endpoint sides, Trend Micro offers you a more advanced home security solution. Please click the <a href="http://bit.do/bcLqZ" target="_blank">download</a> link for the free trial or <a href="http://www.trendmicro.com" target="_blank">visit the site</a> online scan service.</div>
 					<!--untranslated string-->
 					<div class="tm_logo"></div>
 				</div>

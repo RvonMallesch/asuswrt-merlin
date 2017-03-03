@@ -1,8 +1,9 @@
 /* Copyright (c) 2001-2004, Roger Dingledine.
  * Copyright (c) 2004-2006, Roger Dingledine, Nick Mathewson.
- * Copyright (c) 2007-2013, The Tor Project, Inc. */
+ * Copyright (c) 2007-2016, The Tor Project, Inc. */
 /* See LICENSE for licensing information */
 
+extern const char tor_git_revision[];
 /* Ordinarily defined in tor_main.c; this bit is just here to provide one
  * since we're not linking to tor_main.c */
 const char tor_git_revision[] = "";
@@ -19,17 +20,14 @@ const char tor_git_revision[] = "";
 #include "relay.h"
 #include <openssl/opensslv.h>
 #include <openssl/evp.h>
-#ifndef OPENSSL_NO_EC
 #include <openssl/ec.h>
 #include <openssl/ecdh.h>
 #include <openssl/obj_mac.h>
-#endif
 
 #include "config.h"
-#ifdef CURVE25519_ENABLED
 #include "crypto_curve25519.h"
 #include "onion_ntor.h"
-#endif
+#include "crypto_ed25519.h"
 
 #if defined(HAVE_CLOCK_GETTIME) && defined(CLOCK_PROCESS_CPUTIME_ID)
 static uint64_t nanostart;
@@ -79,6 +77,9 @@ perftime(void)
 #define NANOCOUNT(start,end,iters) \
   ( ((double)((end)-(start))) / (iters) )
 
+#define MICROCOUNT(start,end,iters) \
+  ( NANOCOUNT((start), (end), (iters)) / 1000.0 )
+
 /** Run AES performance benchmarks. */
 static void
 bench_aes(void)
@@ -89,7 +90,9 @@ bench_aes(void)
   uint64_t start, end;
   const int bytes_per_iter = (1<<24);
   reset_perftime();
-  c = crypto_cipher_new(NULL);
+  char key[CIPHER_KEY_LEN];
+  crypto_rand(key, sizeof(key));
+  c = crypto_cipher_new(key);
 
   for (len = 1; len <= 8192; len *= 2) {
     int iters = bytes_per_iter / len;
@@ -162,7 +165,8 @@ bench_onion_TAP(void)
     char key_out[CPATH_KEY_MATERIAL_LEN];
     int s;
     dh = crypto_dh_dup(dh_out);
-    s = onion_skin_TAP_client_handshake(dh, or, key_out, sizeof(key_out));
+    s = onion_skin_TAP_client_handshake(dh, or, key_out, sizeof(key_out),
+                                        NULL);
     crypto_dh_free(dh);
     tor_assert(s == 0);
   }
@@ -175,9 +179,8 @@ bench_onion_TAP(void)
   crypto_pk_free(key2);
 }
 
-#ifdef CURVE25519_ENABLED
 static void
-bench_onion_ntor(void)
+bench_onion_ntor_impl(void)
 {
   const int iters = 1<<10;
   int i;
@@ -222,7 +225,8 @@ bench_onion_ntor(void)
   for (i = 0; i < iters; ++i) {
     uint8_t key_out[CPATH_KEY_MATERIAL_LEN];
     int s;
-    s = onion_skin_ntor_client_handshake(state, or, key_out, sizeof(key_out));
+    s = onion_skin_ntor_client_handshake(state, or, key_out, sizeof(key_out),
+                                         NULL);
     tor_assert(s == 0);
   }
   end = perftime();
@@ -232,7 +236,89 @@ bench_onion_ntor(void)
   ntor_handshake_state_free(state);
   dimap_free(keymap, NULL);
 }
-#endif
+
+static void
+bench_onion_ntor(void)
+{
+  int ed;
+
+  for (ed = 0; ed <= 1; ++ed) {
+    printf("Ed25519-based basepoint multiply = %s.\n",
+           (ed == 0) ? "disabled" : "enabled");
+    curve25519_set_impl_params(ed);
+    bench_onion_ntor_impl();
+  }
+}
+
+static void
+bench_ed25519_impl(void)
+{
+  uint64_t start, end;
+  const int iters = 1<<12;
+  int i;
+  const uint8_t msg[] = "but leaving, could not tell what they had heard";
+  ed25519_signature_t sig;
+  ed25519_keypair_t kp;
+  curve25519_keypair_t curve_kp;
+  ed25519_public_key_t pubkey_tmp;
+
+  ed25519_secret_key_generate(&kp.seckey, 0);
+  start = perftime();
+  for (i = 0; i < iters; ++i) {
+    ed25519_public_key_generate(&kp.pubkey, &kp.seckey);
+  }
+  end = perftime();
+  printf("Generate public key: %.2f usec\n",
+         MICROCOUNT(start, end, iters));
+
+  start = perftime();
+  for (i = 0; i < iters; ++i) {
+    ed25519_sign(&sig, msg, sizeof(msg), &kp);
+  }
+  end = perftime();
+  printf("Sign a short message: %.2f usec\n",
+         MICROCOUNT(start, end, iters));
+
+  start = perftime();
+  for (i = 0; i < iters; ++i) {
+    ed25519_checksig(&sig, msg, sizeof(msg), &kp.pubkey);
+  }
+  end = perftime();
+  printf("Verify signature: %.2f usec\n",
+         MICROCOUNT(start, end, iters));
+
+  curve25519_keypair_generate(&curve_kp, 0);
+  start = perftime();
+  for (i = 0; i < iters; ++i) {
+    ed25519_public_key_from_curve25519_public_key(&pubkey_tmp,
+                                                  &curve_kp.pubkey, 1);
+  }
+  end = perftime();
+  printf("Convert public point from curve25519: %.2f usec\n",
+         MICROCOUNT(start, end, iters));
+
+  curve25519_keypair_generate(&curve_kp, 0);
+  start = perftime();
+  for (i = 0; i < iters; ++i) {
+    ed25519_public_blind(&pubkey_tmp, &kp.pubkey, msg);
+  }
+  end = perftime();
+  printf("Blind a public key: %.2f usec\n",
+         MICROCOUNT(start, end, iters));
+}
+
+static void
+bench_ed25519(void)
+{
+  int donna;
+
+  for (donna = 0; donna <= 1; ++donna) {
+    printf("Ed25519-donna = %s.\n",
+           (donna == 0) ? "disabled" : "enabled");
+    ed25519_set_impl_params(donna);
+    bench_ed25519_impl();
+  }
+}
 
 static void
 bench_cell_aes(void)
@@ -244,8 +330,9 @@ bench_cell_aes(void)
   char *b = tor_malloc(len+max_misalign);
   crypto_cipher_t *c;
   int i, misalign;
-
-  c = crypto_cipher_new(NULL);
+  char key[CIPHER_KEY_LEN];
+  crypto_rand(key, sizeof(key));
+  c = crypto_cipher_new(key);
 
   reset_perftime();
   for (misalign = 0; misalign <= max_misalign; ++misalign) {
@@ -360,6 +447,45 @@ bench_siphash(void)
 }
 
 static void
+bench_digest(void)
+{
+  char buf[8192];
+  char out[DIGEST512_LEN];
+  const int lens[] = { 1, 16, 32, 64, 128, 512, 1024, 2048, -1 };
+  const int N = 300000;
+  uint64_t start, end;
+  crypto_rand(buf, sizeof(buf));
+
+  for (int alg = 0; alg < N_DIGEST_ALGORITHMS; alg++) {
+    for (int i = 0; lens[i] > 0; ++i) {
+      reset_perftime();
+      start = perftime();
+      for (int j = 0; j < N; ++j) {
+        switch (alg) {
+          case DIGEST_SHA1:
+            crypto_digest(out, buf, lens[i]);
+            break;
+          case DIGEST_SHA256:
+          case DIGEST_SHA3_256:
+            crypto_digest256(out, buf, lens[i], alg);
+            break;
+          case DIGEST_SHA512:
+          case DIGEST_SHA3_512:
+            crypto_digest512(out, buf, lens[i], alg);
+            break;
+          default:
+            tor_assert(0);
+        }
+      }
+      end = perftime();
+      printf("%s(%d): %.2f ns per call\n",
+             crypto_digest_algorithm_get_name(alg),
+             lens[i], NANOCOUNT(start,end,N));
+    }
+  }
+}
+
+static void
 bench_cell_ops(void)
 {
   const int iters = 1<<16;
@@ -378,8 +504,11 @@ bench_cell_ops(void)
   or_circ->base_.purpose = CIRCUIT_PURPOSE_OR;
 
   /* Initialize crypto */
-  or_circ->p_crypto = crypto_cipher_new(NULL);
-  or_circ->n_crypto = crypto_cipher_new(NULL);
+  char key1[CIPHER_KEY_LEN], key2[CIPHER_KEY_LEN];
+  crypto_rand(key1, sizeof(key1));
+  crypto_rand(key2, sizeof(key2));
+  or_circ->p_crypto = crypto_cipher_new(key1);
+  or_circ->n_crypto = crypto_cipher_new(key2);
   or_circ->p_digest = crypto_digest_new();
   or_circ->n_digest = crypto_digest_new();
 
@@ -434,7 +563,7 @@ bench_dh(void)
                                       dh_b, dh_pubkey_a, sizeof(dh_pubkey_a),
                                       secret_b, sizeof(secret_b));
     tor_assert(slen_a == slen_b);
-    tor_assert(!memcmp(secret_a, secret_b, slen_a));
+    tor_assert(fast_memeq(secret_a, secret_b, slen_a));
     crypto_dh_free(dh_a);
     crypto_dh_free(dh_b);
   }
@@ -443,9 +572,6 @@ bench_dh(void)
          "      %f millisec each.\n", NANOCOUNT(start, end, iters)/1e6);
 }
 
-#if (!defined(OPENSSL_NO_EC)                    \
-     && OPENSSL_VERSION_NUMBER >= OPENSSL_V_SERIES(1,0,0))
-#define HAVE_EC_BENCHMARKS
 static void
 bench_ecdh_impl(int nid, const char *name)
 {
@@ -475,7 +601,7 @@ bench_ecdh_impl(int nid, const char *name)
                               NULL);
 
     tor_assert(slen_a == slen_b);
-    tor_assert(!memcmp(secret_a, secret_b, slen_a));
+    tor_assert(fast_memeq(secret_a, secret_b, slen_a));
     EC_KEY_free(dh_a);
     EC_KEY_free(dh_b);
   }
@@ -495,7 +621,6 @@ bench_ecdh_p224(void)
 {
   bench_ecdh_impl(NID_secp224r1, "P-224");
 }
-#endif
 
 typedef void (*bench_fn)(void);
 
@@ -510,18 +635,17 @@ typedef struct benchmark_t {
 static struct benchmark_t benchmarks[] = {
   ENT(dmap),
   ENT(siphash),
+  ENT(digest),
   ENT(aes),
   ENT(onion_TAP),
-#ifdef CURVE25519_ENABLED
   ENT(onion_ntor),
-#endif
+  ENT(ed25519),
+
   ENT(cell_aes),
   ENT(cell_ops),
   ENT(dh),
-#ifdef HAVE_EC_BENCHMARKS
   ENT(ecdh_p256),
   ENT(ecdh_p224),
-#endif
   {NULL,NULL,0}
 };
 
@@ -544,7 +668,6 @@ main(int argc, const char **argv)
 {
   int i;
   int list=0, n_enabled=0;
-  benchmark_t *b;
   char *errmsg;
   or_options_t *options;
 
@@ -554,10 +677,10 @@ main(int argc, const char **argv)
     if (!strcmp(argv[i], "--list")) {
       list = 1;
     } else {
-      benchmark_t *b = find_benchmark(argv[i]);
+      benchmark_t *benchmark = find_benchmark(argv[i]);
       ++n_enabled;
-      if (b) {
-        b->enabled = 1;
+      if (benchmark) {
+        benchmark->enabled = 1;
       } else {
         printf("No such benchmark as %s\n", argv[i]);
       }
@@ -566,10 +689,13 @@ main(int argc, const char **argv)
 
   reset_perftime();
 
-  crypto_seed_rng(1);
+  if (crypto_seed_rng() < 0) {
+    printf("Couldn't seed RNG; exiting.\n");
+    return 1;
+  }
   crypto_init_siphash_key();
   options = options_new();
-  init_logging();
+  init_logging(1);
   options->command = CMD_RUN_UNITTESTS;
   options->DataDirectory = tor_strdup("");
   options_init(options);
@@ -579,7 +705,7 @@ main(int argc, const char **argv)
     return 1;
   }
 
-  for (b = benchmarks; b->name; ++b) {
+  for (benchmark_t *b = benchmarks; b->name; ++b) {
     if (b->enabled || n_enabled == 0) {
       printf("===== %s =====\n", b->name);
       if (!list)

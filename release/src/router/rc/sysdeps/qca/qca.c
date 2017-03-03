@@ -240,7 +240,15 @@ static inline void __choose_mrate(char *prefix, int *mcast_phy, int *mcast_mcs, 
 	*rate=150000;
 	char tmp[128];
 
-	if (ipv6_enabled() && nvram_get_int("ipv6_radvd")) {
+#ifdef RTCONFIG_IPV6
+	switch (get_ipv6_service()) {
+	default:
+		if (!nvram_get_int(ipv6_nvname("ipv6_radvd")))
+			break;
+		/* fall through */
+#ifdef RTCONFIG_6RELAYD
+	case IPV6_PASSTHROUGH:
+#endif
 		if (!strncmp(prefix, "wl0", 3)) {
 			phy = 2;
 			mcs = 2;	/* 2G: OFDM 12Mbps */
@@ -250,7 +258,11 @@ static inline void __choose_mrate(char *prefix, int *mcast_phy, int *mcast_mcs, 
 			mcs = 1;	/* 5G: HTMIX 13/30Mbps */
 			*rate=30000;
 		}
+		/* fall through */
+	case IPV6_DISABLED:
+		break;
 	}
+#endif
 
 	if (nvram_match(strcat_r(prefix, "nmode_x", tmp), "2") ||	/* legacy mode */
 	    strstr(nvram_safe_get(strcat_r(prefix, "crypto", tmp)), "tkip")) {	/* tkip */
@@ -324,6 +336,40 @@ int bw40_channel_check(int band,char *ext)
 	return 1; //pass
 }   
    
+int get_bw_via_channel(int band, int channel)
+{
+	int wl_bw;
+	char buf[32];
+
+	snprintf(buf, sizeof(buf), "wl%d_bw", band);
+	wl_bw = nvram_get_int(buf);
+	if(band == 0 || channel < 14 || channel > 165 || wl_bw != 1)  {
+		return wl_bw;
+	}
+
+	if(channel == 116 || channel == 140 || channel >= 165) {
+		return 0;	// 20 MHz
+	}
+	if(channel == 132 || channel == 136) {
+		if(wl_bw == 0)
+			return 0;
+		return 2;		// 40 MHz
+	}
+
+	//check for TW band2
+	snprintf(buf, sizeof(buf), "wl%d_country_code", band);
+	if(nvram_match(buf, "TW")) {
+		if(channel == 56)
+			return 0;
+		if(channel == 60 || channel == 64) {
+			if(wl_bw == 0)
+				return 0;
+			return 2;		// 40 MHz
+		}
+	}
+	return wl_bw;
+}
+
 
 #define MAX_NO_GUEST 3
 int gen_ath_config(int band, int is_iNIC,int subnet)
@@ -367,6 +413,7 @@ int gen_ath_config(int band, int is_iNIC,int subnet)
 #ifdef RTCONFIG_QCA_TW_AUTO_BAND4
 	unsigned char CC[3];
 #endif	
+	int bw;
 
 	rep_mode=0;
 	bg_prot=0;
@@ -755,7 +802,15 @@ int gen_ath_config(int band, int is_iNIC,int subnet)
 	//fprintf(fp2,"ifconfig %s up\n",wif);
 	fprintf(fp2,"iwpriv %s hide_ssid %d\n",wif,nvram_get_int(strcat_r(prefix, "closed", tmp)));
 	if (!nvram_get_int(strcat_r(prefix, "closed", tmp))) {
-		fprintf(fp2, "iwconfig %s essid \"%s\"\n", wif, nvram_get(strcat_r(prefix, "ssid", tmp)));
+		int n;
+		char nv[33], buf[128];
+
+		snprintf(nv, sizeof(nv), "%s", nvram_safe_get(strcat_r(prefix, "ssid",tmp)));
+		//replace SSID each char to "\char"
+		memset(buf, 0x0, sizeof(buf));
+		for (n = 0; n < strlen(nv); n++)
+			sprintf(buf, "%s\\%c", buf, nv[n]);
+		fprintf(fp2, "iwconfig %s essid %s\n", wif, buf);
 	}
 	
 	if(subnet==0 && rep_mode==0 )
@@ -888,6 +943,11 @@ int gen_ath_config(int band, int is_iNIC,int subnet)
 		nvram_match(strcat_r(prefix_mssid, "auth_mode_x", temp),"radius"))
 	   	{
 		   	//wep
+			if (nvram_match(strcat_r(prefix_mssid, "auth_mode_x", temp), "shared"))
+				fprintf(fp2, "iwpriv %s authmode 2\n", wif);
+			else
+				fprintf(fp2, "iwpriv %s authmode 1\n", wif);
+
 		   	str = nvram_safe_get(strcat_r(prefix_mssid, "key", temp));
 			sprintf(tmpstr, "%skey%s", prefix_mssid, str);
 			fprintf(fp2,"iwconfig %s key [%s]\n",wif,str); //key index
@@ -947,17 +1007,20 @@ int gen_ath_config(int band, int is_iNIC,int subnet)
 		  ||
 		nvram_match(strcat_r(prefix_mssid, "auth_mode_x", temp),"radius"))
 			fprintf(fp, "wpa=0\n");
-	else if (nvram_match(strcat_r(prefix_mssid, "crypto", temp), "tkip")) 
+	else if (nvram_match(strcat_r(prefix_mssid, "auth_mode_x", temp), "psk") 
+			|| nvram_match(strcat_r(prefix_mssid, "auth_mode_x", temp), "wpa"))
 	{	
 			wpapsk=1;   
 			fprintf(fp, "wpa=1\n");
 	}		
-	else if (nvram_match(strcat_r(prefix_mssid, "crypto", temp), "aes")) 
+	else if (nvram_match(strcat_r(prefix_mssid, "auth_mode_x", temp), "psk2") 
+			|| nvram_match(strcat_r(prefix_mssid, "auth_mode_x", temp), "wpa2"))
 	{		
    			wpapsk=2;	   
 	 		fprintf(fp, "wpa=2\n");
 	}		
-	else if (nvram_match(strcat_r(prefix_mssid, "crypto", temp), "tkip+aes")) 
+	else if (nvram_match(strcat_r(prefix_mssid, "auth_mode_x", temp), "pskpsk2") 
+			|| nvram_match(strcat_r(prefix_mssid, "auth_mode_x", temp), "wpawpa2"))
 	{	
 	   		wpapsk=3;
 	 	  	fprintf(fp, "wpa=3\n");
@@ -972,7 +1035,13 @@ int gen_ath_config(int band, int is_iNIC,int subnet)
 	{   
 	   	if(!flag_8021x)
 		{   
-			sprintf(tmpstr, "wpa_passphrase=%s\n",nvram_safe_get(strcat_r(prefix_mssid, "wpa_psk",temp)));
+			char nv[65];
+
+			snprintf(nv, sizeof(nv), "%s", nvram_safe_get(strcat_r(prefix_mssid, "wpa_psk",temp)));
+			if (strlen(nv) == 64)
+				sprintf(tmpstr, "wpa_psk=%s\n", nv);
+			else
+				sprintf(tmpstr, "wpa_passphrase=%s\n", nv);
 			fprintf(fp, "%s", tmpstr);
 		}	
 	}	
@@ -982,12 +1051,12 @@ int gen_ath_config(int band, int is_iNIC,int subnet)
 		if(!ban)
 		{   
 			//HT_BW
-			str = nvram_safe_get(strcat_r(tmpfix, "bw", tmp));
+			bw = get_bw_via_channel(band, nvram_get_int(strcat_r(tmpfix, "channel", tmp)));
 			if (sw_mode == SW_MODE_REPEATER && wlc_band == band)
 				sprintf(t_bw,"HT40");	
-			else if (atoi(str) > 0)
+			else if (bw > 0)
 			{
-	   			if(strstr(t_mode,"11ACV") && (atoi(str)==3 || atoi(str)==1)) //80 BW or auto BW
+				if(strstr(t_mode,"11ACV") && (bw==3 || bw==1)) //80 BW or auto BW
 					sprintf(t_bw,"HT80");
 				else	
 				{   
@@ -1043,16 +1112,21 @@ int gen_ath_config(int band, int is_iNIC,int subnet)
 		{
 			memset(CC, 0, sizeof(CC));
 	        	FRead(CC, OFFSET_COUNTRY_CODE, 2);
-	                if(!strcmp(CC,"TW"))//old NCC
-				fprintf(fp3, "wifitool %s block_acs_channel 52,56,60,64\n",wif);
-			//else if(!strcmp(CC,"AA"))//new NCC
-			//	fprintf(fp3, "wifitool %s block_acs_channel 36,40,44,48\n",wif);
+			//for TW, acs but skip 5G band1 & band2
+	                if(!strcmp(CC,"TW")
+#if defined(RTCONFIG_TCODE)
+			  || !strncmp(nvram_safe_get("territory_code"), "TW", 2) 
+
+#endif
+			)
+				fprintf(fp3, "wifitool %s block_acs_channel 36,40,44,48,52,56,60,64\n",wif);
 		}	
 #endif		
+		fprintf(fp3, "iwpriv wifi%d dcs_enable 0\n",band);	//not to scan and change to other channels
 	   	fprintf(fp3, "iwconfig %s channel auto\n",wif);
 	}
 	if(!band && strstr(t_mode, "11N") != NULL) //only 2.4G && N mode is used
-		fprintf(fp3,"iwpriv %s disablecoext %d\n",wif,nvram_get_int(strcat_r(tmpfix, "bw", tmp))==2?1:0);	// when N mode is used
+		fprintf(fp3,"iwpriv %s disablecoext %d\n",wif,(bw==2)?1:0);	// when N mode is used
 
 	if(rep_mode)
 	   goto next;
@@ -1599,7 +1673,6 @@ static int __wps_pbc(const int multiband)
 //              dbg("WPS: PBC\n");
 		g_isEnrollee[i] = 1;
 		eval("hostapd_cli", "-i", (char*)get_wifname(i), "wps_pbc");
-		eval("hostapd_cli", "-i", (char*)get_wifname(i), "wps_ap_pin", "disable");
 
 		++i;
 	}
@@ -1708,7 +1781,6 @@ void start_wsc(void)
 			dbg("WPS: PBC\n");	// PBC method
 			g_isEnrollee[i] = 1;
 			eval("hostapd_cli", "-i", (char*)get_wifname(i), "wps_pbc");
-			eval("hostapd_cli", "-i", (char*)get_wifname(i), "wps_ap_pin", "disable");
 		}
 
 		++i;
@@ -2142,7 +2214,8 @@ getSiteSurvey(int band,char* ofile)
 	char *pt1,*pt2;
 	char a1[10],a2[10];
 	char ssid_str[256];
-	char ch[4],ssid[33],address[18],enc[9],auth[16],sig[9],wmode[8];
+	char ch[4] = "", ssid[33] = "", address[18] = "", enc[9] = "";
+	char auth[16] = "", sig[9] = "", wmode[8] = "";
 	int  lock;
 	char ure_mac[18];
 	int wl_authorized = 0;
@@ -2296,7 +2369,9 @@ getSiteSurvey(int band,char* ofile)
 		   		  
 		//sig
 	        pt1 = strstr(buf[3], "Quality=");	
-		pt2 = strstr(pt1,"/");
+		pt2 = NULL;
+		if (pt1 != NULL)
+			pt2 = strstr(pt1,"/");
 		if(pt1 && pt2)
 		{
 			memset(sig,0,sizeof(sig));

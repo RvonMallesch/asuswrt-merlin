@@ -4,8 +4,7 @@
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 <meta HTTP-EQUIV="Pragma" CONTENT="no-cache">
 <meta HTTP-EQUIV="Expires" CONTENT="-1">
-<meta http-equiv="X-UA-Compatible" content="IE=EmulateIE7, IE=EmulateIE10" />
-<meta name="svg.render.forceflash" content="false" />
+<meta http-equiv="X-UA-Compatible" content="IE=Edge" />
 <title><#Web_Title#> - <#traffic_monitor#> : <#menu4_2_2#></title>
 <link rel="stylesheet" type="text/css" href="index_style.css">
 <link rel="stylesheet" type="text/css" href="form_style.css">
@@ -14,7 +13,6 @@
 <link rel="shortcut icon" href="images/favicon.png">
 <link rel="icon" href="images/favicon.png">
 <script language="JavaScript" type="text/javascript" src="help.js"></script>
-<script src='svg.js' data-path="/svghtc/" data-debug="false"></script>
 <script language="JavaScript" type="text/javascript" src="/state.js"></script>
 <script language="JavaScript" type="text/javascript" src="/general.js"></script>
 <script language="JavaScript" type="text/javascript" src="/tmmenu.js"></script>
@@ -36,43 +34,43 @@ var debugTime = 0;
 var href_lang = get_supportsite_lang();
 switch("<% nvram_get("preferred_lang"); %>"){
 	case "KR":
-						href_lang = "/us/";
+						href_lang = "/";
 						break;
 	case "RO":
-						href_lang = "/us/";
+						href_lang = "/";
 						break;
 	case "HU":
-						href_lang = "/us/";
+						href_lang = "/";
 						break;
 	case "IT":
-						href_lang = "/us/";
+						href_lang = "/";
 						break;
 	case "DA":
-						href_lang = "/us/";
+						href_lang = "/";
 						break;	
 	case "BR":
-						href_lang = "/us/";
+						href_lang = "/";
 						break;
 	case "SV":
-						href_lang = "/us/";
+						href_lang = "/";
 						break;
 	case "FI":
-						href_lang = "/us/";
+						href_lang = "/";
 						break;
 	case "NO":
-						href_lang = "/us/";
+						href_lang = "/";
 						break;
 	case "TH":
-						href_lang = "/us/";
+						href_lang = "/";
 						break;
 	case "DE":
-						href_lang = "/us/";
+						href_lang = "/";
 						break;
 	case "PL":
-						href_lang = "/us/";
+						href_lang = "/";
 						break;
 	case "CZ":
-						href_lang = "/us/";
+						href_lang = "/";
 						break;
 	default:
 						break;
@@ -196,9 +194,6 @@ function init()
 	initCommon(1, 0, 0, 1);	   //Viz 2010.09
 	ref.initX();
 	document.getElementById("faq0").href = "http://www.asus.com"+ href_lang +"support/Search-Result-Detail/69B50762-C9C0-15F1-A5B8-C7B652F50ACF/?keyword=ASUSWRT%20Traffic%20Monitor" ;
-	if(bwdpi_support){
-		document.getElementById('content_title').innerHTML = "<#menu5_3_2#> - <#traffic_monitor#>";
-	}	
 }
 
 function switchPage(page){
@@ -288,7 +283,7 @@ function Zoom(func){
 						<table width="100%" >
 							<tr>
 							<td  class="formfonttitle" align="left">
-										<div id="content_title" style="margin-top:5px;"><#Menu_TrafficManager#> - <#traffic_monitor#></div>
+										<div style="margin-top:5px;"><#Menu_TrafficManager#> - <#traffic_monitor#></div>
 									</td>
 							<td>
      						<div align="right">
@@ -340,27 +335,26 @@ function Zoom(func){
 							</span>
 							<!--========= svg =========-->
 							<!--[if IE]>
-										<div id="svg-table" align="left">
-										<object id="graph" src="tm.svg" classid="image/svg+xml" width="730" height="350">
-										</div>
+								<div id="svg-table" align="left" class="IE8HACK">
+									<object id="graph" src="tm.svg" classid="image/svg+xml" width="730" height="350">
+								</div>
 							<![endif]-->
 							<!--[if !IE]>-->
 								<object id="graph" data="tm.svg" type="image/svg+xml" width="730" height="350">
 							<!--<![endif]-->
 								</object>
 							<!--========= svg =========-->
-
                     	</td>
         	    	</tr>
 
   		     		<tr>
 						<td>
-						<table width="730px" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable_NWM" style="margin-top:10px;margin-left:-1px;*margin-left:-10px;">
+				    	 	<table width="730px" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3" class="FormTable_NWM" style="margin-top:0px;margin-left:-1px;*margin-left:-10px;margin-left:-12px \9;">
 						  		<tr>
-						  			<th style="text-align:center;width:160px;height:25px;"><#Current#></th>
-						  			<th style="text-align:center;width:160px;height:25px;"><#Average#></th>
-						  			<th style="text-align:center;width:160px;height:25px;"><#Maximum#></th>
-						  			<th style="text-align:center;width:160px;height:25px;"><#Total#></th>
+						  			<th style="text-align:center;width:160px;"><#Current#></th>
+						  			<th style="text-align:center;width:160px;"><#Average#></th>
+						  			<th style="text-align:center;width:160px;"><#Maximum#></th>
+						  			<th style="text-align:center;width:160px;"><#Total#></th>
 						  		</tr>
 						  		<tr>
 						  			<td style="text-align:center;font-weight: bold; background-color:#111;"><div id="rx-current"></div></td>

@@ -188,14 +188,139 @@ extern char *upper_strstr(const char *const str, const char *const target){
 	return (char *)(str+len);
 }
 
+#ifdef HND_ROUTER
+// defined (__GLIBC__) && !defined(__UCLIBC__)
+size_t strlcpy(char *dst, const char *src, size_t size)
+{
+	size_t srclen, len;
+
+	srclen = strlen(src);
+	if (size <= 0)
+		return srclen;
+
+	len = (srclen < size) ? srclen : size - 1;
+	memcpy(dst, src, len); /* should not overlap */
+	dst[len] = '\0';
+
+	return srclen;
+}
+
+size_t strlcat(char *dst, const char *src, size_t size)
+{
+	size_t dstlen;
+	char *null;
+
+	null = memchr(dst, '\0', size);
+	if (null == NULL)
+		null = dst + size;
+	dstlen = null - dst;
+
+	return dstlen + strlcpy(null, src, size - dstlen);
+}
+#endif
+
+in_addr_t inet_addr_(const char *addr)
+{
+	struct in_addr in;
+	return inet_aton(addr, &in) ? in.s_addr : INADDR_ANY;
+}
+
+int inet_equal(const char *addr1, const char *mask1, const char *addr2, const char *mask2)
+{
+	return ((inet_network(addr1) & inet_network(mask1)) ==
+		(inet_network(addr2) & inet_network(mask2)));
+}
+
+int inet_intersect(const char *addr1, const char *mask1, const char *addr2, const char *mask2)
+{
+	in_addr_t max_netmask = inet_network(mask1) | inet_network(mask2);
+	return ((inet_network(addr1) & max_netmask) ==
+		(inet_network(addr2) & max_netmask));
+}
+
+int inet_deconflict(const char *addr1, const char *mask1, const char *addr2, const char *mask2, struct in_addr *result)
+{
+	const static struct class {
+		in_addr_t network;
+		in_addr_t netmask;
+	} classes[] = {
+		{ 0xc0a80000, 0xffff0000 }, /* 192.168.0.0/16 */
+		{ 0xac100000, 0xfff00000 }, /* 172.16.0.0/12 */
+		{ 0x0a000000, 0xff000000 }, /* 10.0.0.0/8 */
+		{ 0, 0 }
+	};
+	struct class *class, *found;
+	in_addr_t lan_ipaddr = inet_network(addr1);
+	in_addr_t lan_netmask = inet_network(mask1);
+	in_addr_t wan_ipaddr = inet_network(addr2);
+	in_addr_t wan_netmask = inet_network(mask2);
+	in_addr_t max_netmask = lan_netmask | wan_netmask;
+
+	if ((lan_ipaddr & max_netmask) != (wan_ipaddr & max_netmask)) {
+		/* not really intersecting */
+		return 0;
+	}
+
+	found = NULL;
+	for (class = (struct class *) classes; class->network; class++) {
+		if (~lan_netmask > ~class->netmask)
+			continue;
+		if ((lan_ipaddr & class->netmask) != class->network)
+			found = found ? : class;
+		else if (~lan_netmask < ~class->netmask) {
+			found = class;
+			lan_ipaddr += ~lan_netmask + 1;
+			break;
+		}
+	}
+	if (found)
+		lan_ipaddr = found->network | (lan_ipaddr & ~found->netmask);
+	else {
+		/* non-private address or too big network mask,
+		 * address might become non-RFC1918 */
+		lan_ipaddr += ~lan_netmask + 1;
+	}
+
+	if (result)
+		result->s_addr = htonl(lan_ipaddr);
+
+	return found ? 1 : 2;
+}
+
 #ifdef RTCONFIG_IPV6
-int get_ipv6_service(void)
+char *ipv6_nvname_by_unit(const char *name, int unit)
+{
+	static char name_ipv6[128];
+
+	if (strncmp(name, "ipv6_", sizeof("ipv6_") - 1) != 0) {
+		_dprintf("Wrong ipv6 nvram namespace: \"%s\"\n", name);
+		return (char *)name;
+	}
+
+	if (unit == 0)
+		return (char *)name;
+
+	snprintf(name_ipv6, sizeof(name_ipv6), "ipv6%d_%s", unit, name + sizeof("ipv6_") - 1);
+
+	return name_ipv6;
+}
+
+char *ipv6_nvname(const char *name)
+{
+	return ipv6_nvname_by_unit(name, wan_primary_ifunit());
+}
+
+int get_ipv6_service_by_unit(int unit)
 {
 	static const struct {
 		char *name;
 		int service;
 	} services[] = {
 		{ "dhcp6",	IPV6_NATIVE_DHCP },
+#ifdef RTCONFIG_6RELAYD
+		{ "ipv6pt",     IPV6_PASSTHROUGH },
+		{ "flets",	IPV6_PASSTHROUGH },
+#endif
 		{ "6to4",	IPV6_6TO4 },
 		{ "6in4",	IPV6_6IN4 },
 		{ "6rd",	IPV6_6RD },
@@ -206,12 +331,17 @@ int get_ipv6_service(void)
 	char *value;
 	int i;
 
-	value = nvram_safe_get("ipv6_service");
+	value = nvram_safe_get(ipv6_nvname_by_unit("ipv6_service", unit));
 	for (i = 0; services[i].name; i++) {
 		if (strcmp(value, services[i].name) == 0)
 			return services[i].service;
 	}
 	return IPV6_DISABLED;
+}
+
+int get_ipv6_service(void)
+{
+	return get_ipv6_service_by_unit(wan_primary_ifunit());
 }
 
 const char *ipv6_router_address(struct in6_addr *in6addr)
@@ -221,17 +351,15 @@ const char *ipv6_router_address(struct in6_addr *in6addr)
 	static char addr6[INET6_ADDRSTRLEN];
 
 	addr6[0] = '\0';
+	memset(&addr, 0, sizeof(addr));
 
-	if ((p = nvram_get("ipv6_rtr_addr")) && *p) {
+	if ((p = nvram_get(ipv6_nvname("ipv6_rtr_addr"))) && *p) {
 		inet_pton(AF_INET6, p, &addr);
-	}
-	else if ((p = nvram_get("ipv6_prefix")) && *p) {
+	} else if ((p = nvram_get(ipv6_nvname("ipv6_prefix"))) && *p) {
 		inet_pton(AF_INET6, p, &addr);
 		addr.s6_addr16[7] = htons(0x0001);
-	}
-	else {
+	} else
 		return addr6;
-	}
 
 	inet_ntop(AF_INET6, &addr, addr6, sizeof(addr6));
 	if (in6addr)
@@ -257,14 +385,15 @@ const char *ipv6_address(const char *ipaddr6)
 // extract prefix from configured IPv6 address
 const char *ipv6_prefix(struct in6_addr *in6addr)
 {
-	static char prefix[INET6_ADDRSTRLEN + 1];
+	static char prefix[INET6_ADDRSTRLEN];
 	struct in6_addr addr;
 	int i, r;
 
 	prefix[0] = '\0';
+	memset(&addr, 0, sizeof(addr));
 
-	if (inet_pton(AF_INET6, nvram_safe_get("ipv6_rtr_addr"), &addr) > 0) {
-		r = nvram_get_int("ipv6_prefix_length") ? : 64;
+	if (inet_pton(AF_INET6, nvram_safe_get(ipv6_nvname("ipv6_rtr_addr")), &addr) > 0) {
+		r = nvram_get_int(ipv6_nvname("ipv6_prefix_length")) ? : 64;
 		for (r = 128 - r, i = 15; r > 0; r -= 8) {
 			if (r >= 8)
 				addr.s6_addr[i--] = 0;
@@ -274,8 +403,33 @@ const char *ipv6_prefix(struct in6_addr *in6addr)
 		inet_ntop(AF_INET6, &addr, prefix, sizeof(prefix));
 	}
 
+	if (in6addr)
+		memcpy(in6addr, &addr, sizeof(addr));
+
 	return prefix;
 }
+
+#if 0 /* unused */
+const char *ipv6_prefix(const char *ifname)
+{
+	return getifaddr(ifname, AF_INET6, GIF_PREFIX) ? : "";
+}
+ 
+int ipv6_prefix_len(const char *ifname)
+{
+	const char *value;
+
+	value = getifaddr(ifname, AF_INET6, /*GIF_PREFIX |*/ GIF_PREFIXLEN);
+	if (value == NULL)
+		return 0;
+
+	value = strchr(value, '/');
+	if (value)
+		return atoi(value + 1);
+
+	return 128;
+}
+#endif
 
 void reset_ipv6_linklocal_addr(const char *ifname, int flush)
 {
@@ -317,7 +471,7 @@ void reset_ipv6_linklocal_addr(const char *ifname, int flush)
 
 int with_ipv6_linklocal_addr(const char *ifname)
 {
-	return (getifaddr((char *) ifname, AF_INET6, GIF_LINKLOCAL) != NULL);
+	return (getifaddr(ifname, AF_INET6, GIF_LINKLOCAL) != NULL);
 }
 
 #if 1 /* temporary till httpd route table redo */
@@ -598,17 +752,16 @@ int wait_action_idle(int n)
 
 const char *get_wanip(void)
 {	
-	char tmp[100], prefix[]="wanXXXXXX_";
-	int unit=0;
+	char tmp[100], prefix[sizeof("wanXXXXXXXXXX_")];
 
-	snprintf(prefix, sizeof(prefix), "wan%d_", unit);
+	snprintf(prefix, sizeof(prefix), "wan%d_", wan_primary_ifunit());
 
 	return nvram_safe_get(strcat_r(prefix, "ipaddr", tmp));
 }
 
 int get_wanstate(void)
 {
-	char tmp[100], prefix[]="wanXXXXX_";
+	char tmp[100], prefix[sizeof("wanXXXXXXXXXX_")];
 
 	snprintf(prefix, sizeof(prefix), "wan%d_", wan_primary_ifunit());
 
@@ -617,24 +770,13 @@ int get_wanstate(void)
 
 const char *get_wanface(void)
 {
-	return get_wan_ifname(0);
+	return get_wan_ifname(wan_primary_ifunit());
 }
 
 #ifdef RTCONFIG_IPV6
 const char *get_wan6face(void)
 {
-	switch (get_ipv6_service()) {
-	case IPV6_NATIVE_DHCP:
-	case IPV6_MANUAL:
-		return get_wan6_ifname(0);
-	case IPV6_6TO4:
-		return "v6to4";
-	case IPV6_6IN4:
-		return "v6in4";
-	case IPV6_6RD:
-		return "6rd";
-	}
-	return "";
+	return get_wan6_ifname(wan_primary_ifunit());
 }
 
 int update_6rd_info(void)
@@ -642,22 +784,21 @@ int update_6rd_info(void)
 	char tmp[100], prefix[]="wanXXXXX_";
 	char addr6[INET6_ADDRSTRLEN + 1], *value;
 	struct in6_addr addr;
-	int unit = 0;
 
-	if (get_ipv6_service() != IPV6_6RD || !nvram_get_int("ipv6_6rd_dhcp"))
+	if (get_ipv6_service() != IPV6_6RD || !nvram_get_int(ipv6_nvname("ipv6_6rd_dhcp")))
 		return -1;
 
-	snprintf(prefix, sizeof(prefix), "wan%d_", unit);
+	snprintf(prefix, sizeof(prefix), "wan%d_", wan_primary_ifunit());
 
 	value = nvram_safe_get(strcat_r(prefix, "6rd_prefix", tmp));
 	if (*value ) {
 		/* try to compact IPv6 prefix */
 		if (inet_pton(AF_INET6, value, &addr) > 0)
 			value = (char *) inet_ntop(AF_INET6, &addr, addr6, sizeof(addr6));
-		nvram_set("ipv6_6rd_prefix", value);
-		nvram_set("ipv6_6rd_router", nvram_safe_get(strcat_r(prefix, "6rd_router", tmp)));
-		nvram_set("ipv6_6rd_prefixlen", nvram_safe_get(strcat_r(prefix, "6rd_prefixlen", tmp)));
-		nvram_set("ipv6_6rd_ip4size", nvram_safe_get(strcat_r(prefix, "6rd_ip4size", tmp)));
+		nvram_set(ipv6_nvname("ipv6_6rd_prefix"), value);
+		nvram_set(ipv6_nvname("ipv6_6rd_router"), nvram_safe_get(strcat_r(prefix, "6rd_router", tmp)));
+		nvram_set(ipv6_nvname("ipv6_6rd_prefixlen"), nvram_safe_get(strcat_r(prefix, "6rd_prefixlen", tmp)));
+		nvram_set(ipv6_nvname("ipv6_6rd_ip4size"), nvram_safe_get(strcat_r(prefix, "6rd_ip4size", tmp)));
 		return 1;
 	}
 
@@ -665,10 +806,16 @@ int update_6rd_info(void)
 }
 #endif
 
-const char *_getifaddr(char *ifname, int family, int flags, char *buf, int size)
+const char *_getifaddr(const char *ifname, int family, int flags, char *buf, int size)
 {
 	struct ifaddrs *ifap, *ifa;
-	unsigned char *addr, *netmask;
+	union {
+#ifdef RTCONFIG_IPV6
+		struct in6_addr in6;
+#endif
+		struct in_addr in;
+	} addrbuf;
+	unsigned char *addr, *netmask, *paddr, *pnetmask;
 	unsigned char len, maxlen;
 
 	if (getifaddrs(&ifap) != 0) {
@@ -689,24 +836,31 @@ const char *_getifaddr(char *ifname, int family, int flags, char *buf, int size)
 			if (IN6_IS_ADDR_LINKLOCAL(addr) ^ !!(flags & GIF_LINKLOCAL))
 				continue;
 			netmask = (void *) &((struct sockaddr_in6 *) ifa->ifa_netmask)->sin6_addr;
-			maxlen = 128;
+			maxlen = sizeof(struct in6_addr) * 8;
 			break;
 #endif
 		case AF_INET:
 			addr = (void *) &((struct sockaddr_in *) ifa->ifa_addr)->sin_addr;
 			netmask = (void *) &((struct sockaddr_in *) ifa->ifa_netmask)->sin_addr;
-			maxlen = 32;
+			maxlen = sizeof(struct in_addr) * 8;
 			break;
 		default:
 			continue;
 		}
 
+		if ((flags & GIF_PREFIX) && addr && netmask) {
+			paddr = addr = memcpy(&addrbuf, addr, maxlen / 8);
+			pnetmask = netmask;
+			for (len = 0; len < maxlen; len += 8)
+				*paddr++ &= *pnetmask++;
+		}
+
 		if (addr && inet_ntop(ifa->ifa_addr->sa_family, addr, buf, size) != NULL) {
-			if (netmask && (flags & GIF_PREFIXLEN)) {
-				for (len = 0; len < maxlen && *netmask == 0xff; netmask++)
-					len += 8;
+			if ((flags & GIF_PREFIXLEN) && netmask) {
+				for (len = 0; len < maxlen && *netmask == 0xff; len += 8)
+					netmask++;
 				if (len < maxlen && *netmask) {
-					switch(*netmask) {
+					switch (*netmask) {
 					case 0xfe: len += 7; break;
 					case 0xfc: len += 6; break;
 					case 0xf8: len += 5; break;
@@ -722,7 +876,7 @@ const char *_getifaddr(char *ifname, int family, int flags, char *buf, int size)
 				if (len < maxlen) {
 					netmask = memchr(buf, 0, size);
 					if (netmask)
-						snprintf(netmask, size - ((char *) netmask - buf), "/%d", len);
+						snprintf((char *) netmask, size - ((char *) netmask - buf), "/%d", len);
 				}
 			}
 			freeifaddrs(ifap);
@@ -735,7 +889,7 @@ error:
 	return NULL;
 }
 
-const char *getifaddr(char *ifname, int family, int flags)
+const char *getifaddr(const char *ifname, int family, int flags)
 {
 	static char buf[INET6_ADDRSTRLEN];
 
@@ -876,6 +1030,19 @@ int nvram_set_int(const char *key, int value)
 	return nvram_set(key, nvramstr);
 }
 
+double nvram_get_double(const char *key)
+{
+	return atof(nvram_safe_get(key));
+}
+
+int nvram_set_double(const char *key, double value)
+{
+	char nvramstr[33];
+
+	snprintf(nvramstr, sizeof(nvramstr), "%.9g", value);
+	return nvram_set(key, nvramstr);
+}
+
 #if defined(RTCONFIG_SSH) || defined(RTCONFIG_HTTPS)
 int nvram_get_file(const char *key, const char *fname, int max)
 {
@@ -896,7 +1063,7 @@ int nvram_get_file(const char *key, const char *fname, int max)
 	}
 	return r;
 /*
-	char b[3499];
+	char b[3500];
 	int n;
 	char *p;
 
@@ -933,7 +1100,7 @@ int nvram_set_file(const char *key, const char *fname, int max)
 	}
 	return r;
 /*
-	char a[3499];
+	char a[3500];
 	char b[7000];
 	int n;
 
@@ -1038,6 +1205,7 @@ void bcmvlan_models(int model, char *vlan)
 	case MODEL_RTAC88U:
 	case MODEL_RTAC3100:
 	case MODEL_RTAC5300:
+	case MODEL_RTAC5300R:
 	case MODEL_RTAC1200G:
 	case MODEL_RTAC1200GP:
 		strcpy(vlan, "vlan1");
@@ -1424,11 +1592,7 @@ int is_psta(int unit)
 {
 	if (unit < 0) return 0;
 	if ((nvram_get_int("sw_mode") == SW_MODE_AP) &&
-		((nvram_get_int("wlc_psta") == 1)
-#ifdef RTCONFIG_BCM_7114
-		|| (nvram_get_int("wlc_psta") == 3)
-#endif
-		) &&
+		(nvram_get_int("wlc_psta") == 1) &&
 		((nvram_get_int("wlc_band") == unit)
 #ifdef PXYSTA_DUALBAND
 		|| (nvram_match("exband", "1") && nvram_get_int("wlc_band_ex") == unit)
@@ -1475,6 +1639,7 @@ int psta_exist_except(int unit)
 	char word[256], *next;
 	int idx = 0;
 
+	if (unit < 0) return 0;
 	foreach (word, nvram_safe_get("wl_ifnames"), next) {
 		if (idx == unit) goto END;
 		if (is_psta(idx)) return 1;
@@ -1503,6 +1668,7 @@ int psr_exist_except(int unit)
 	char word[256], *next;
 	int idx = 0;
 
+	if (unit < 0) return 0;
 	foreach (word, nvram_safe_get("wl_ifnames"), next) {
 		if (idx == unit) goto END;
 		if (is_psr(idx)) return 1;
@@ -1950,6 +2116,91 @@ long fappend(FILE *out, const char *fname)
 	fclose(in);
 	return r;
 }
+
+
+int internet_ready(void)
+{
+	if(nvram_get_int("ntp_ready") == 1)
+		return 1;
+	return 0;
+}
+
+#ifdef RTCONFIG_TRAFFIC_LIMITER
+static char *traffic_limiter_get_path(const char *type)
+{
+	if (type == NULL)
+		return NULL;
+	else if (strcmp(type, "limit") == 0)
+		return "/jffs/tld/tl_limit";
+	else if (strcmp(type, "alert") == 0)
+		return "/jffs/tld/tl_alert";
+	else if (strcmp(type, "count") == 0)
+		return "/jffs/tld/tl_count";
+
+	return NULL;
+}
+
+unsigned int traffic_limiter_read_bit(const char *type)
+{
+	char *path;
+	char buf[sizeof("4294967295")];
+	unsigned int val = 0;
+
+	path = traffic_limiter_get_path(type);
+	if (path && f_read_string(path, buf, sizeof(buf)) > 0)
+		val = strtoul(buf, NULL, 10);
+
+	TL_DBG("path = %s, val=%u\n", path ? : "NULL", val);
+	return val;
+}
+
+void traffic_limiter_set_bit(const char *type, int unit)
+{
+	char *path;
+	char buf[sizeof("4294967295")];
+	unsigned int val = 0;
+
+	path = traffic_limiter_get_path(type);
+	if (path) {
+		val = traffic_limiter_read_bit(type);
+		val |= (1U << unit);
+		snprintf(buf, sizeof(buf), "%u", val);
+		f_write_string(path, buf, 0, 0);
+	}
+
+	TL_DBG("path = %s, val=%u\n", path ? : "NULL", val);
+}
+
+void traffic_limiter_clear_bit(const char *type, int unit)
+{
+	char *path;
+	char buf[sizeof("4294967295")];
+	unsigned int val = 0;
+
+	path = traffic_limiter_get_path(type);
+	if (path) {
+		val = traffic_limiter_read_bit(type);
+		val &= ~(1U << unit);
+		snprintf(buf, sizeof(buf), "%u", val);
+		f_write_string(path, buf, 0, 0);
+	}
+
+	TL_DBG("path = %s, val=%u\n", path ? : "NULL", val);
+}
+
+double traffic_limiter_get_realtime(int unit)
+{
+	char path[PATH_MAX];
+	char buf[32];
+	double val = 0;
+
+	snprintf(path, sizeof(path), "/tmp/tl%d_realtime", unit);
+	if (f_read_string(path, buf, sizeof(buf)) > 0)
+		val = atof(buf);
+
+	return val;
+}
+#endif
 
 void run_custom_script(char *name, char *args)
 {

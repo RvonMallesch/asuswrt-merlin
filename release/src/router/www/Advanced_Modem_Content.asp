@@ -365,7 +365,7 @@ function show_ISP_list(){
 			if(document.form.modem_isp.options.length > 0)
 				continue;
 			else{
-				alert(Untranslated.ISP_not_support);
+				alert("<#HSDPAConfig_Country_hint#>");
 				document.form.modem_country.focus();
 				document.form.modem_country.selectedIndex = countrylist.length-1;
 				break;
@@ -643,7 +643,7 @@ function change_apn_mode(){
 		document.getElementById("modem_user_div_tr").style.display = "";
 		document.getElementById("modem_pass_div_tr").style.display = "";	
 		if(document.form.modem_enable.value == "1")
-			mdoem_enable_str = "WCDMA (UMTS)";
+			mdoem_enable_str = "WCDMA (UMTS) / LTE";
 		else if(document.form.modem_enable.value == "2")
 			mdoem_enable_str = "CDMA2000 (EVDO)";
 		else if(document.form.modem_enable.value == "3")
@@ -832,7 +832,7 @@ function change_apn_mode(){
 						</th>
 						<td>
 							<select name="modem_enable_option" id="modem_enable_option" class="input_option" onchange="switch_modem_mode(this.value);reloadProfile();">
-								<option value="1" <% nvram_match("modem_enable", "1", "selected"); %>>WCDMA (UMTS)</option>
+								<option value="1" <% nvram_match("modem_enable", "1", "selected"); %>>WCDMA (UMTS) / LTE</option>
 								<option value="2" <% nvram_match("modem_enable", "2", "selected"); %>>CDMA2000 (EVDO)</option>
 								<option value="3" <% nvram_match("modem_enable", "3", "selected"); %>>TD-SCDMA</option>
 								<option value="4" <% nvram_match("modem_enable", "4", "selected"); %>>WiMAX</option>
@@ -949,6 +949,28 @@ function change_apn_mode(){
 					</tr>
 				</table>	
 	
+				<table width="100%" border="1" align="center" cellpadding="4" cellspacing="0" bordercolor="#6b8fa3"  class="FormTable" style="margin-top:8px">
+				<thead>
+				<tr>
+					<td colspan="2"><#PPPConnection_x_HostNameForISP_sectionname#></td>
+				</tr>
+				</thead>
+				<tr>
+					<th><a class="hintstyle" href="javascript:void(0);" onClick=""><#Extend_TTL_Value#></a></th>
+						<td>
+							<input type="radio" name="ttl_inc_enable" class="input" value="1" <% nvram_match("ttl_inc_enable", "1", "checked"); %>><#checkbox_Yes#>
+							<input type="radio" name="ttl_inc_enable" class="input" value="0" <% nvram_match("ttl_inc_enable", "0", "checked"); %>><#checkbox_No#>
+						</td>
+				</tr>
+				<tr>
+					<th><a class="hintstyle" href="javascript:void(0);" onClick=""><#Spoof_TTL_Value#></a></th>
+						<td>
+							<input type="radio" name="ttl_spoof_enable" class="input" value="1" <% nvram_match("ttl_spoof_enable", "1", "checked"); %>><#checkbox_Yes#>
+							<input type="radio" name="ttl_spoof_enable" class="input" value="0" <% nvram_match("ttl_spoof_enable", "0", "checked"); %>><#checkbox_No#>
+						</td>
+				</tr>
+				</table>
+
 				<div class="apply_gen">
 					<input class="button_gen" onclick="applyRule()" type="button" value="<#CTL_apply#>"/>
 				</div>

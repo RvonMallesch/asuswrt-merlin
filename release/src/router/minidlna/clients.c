@@ -22,7 +22,6 @@
 #include "clients.h"
 #include "getifaddr.h"
 #include "log.h"
-#include "utils.h"
 
 struct client_type_s client_types[] =
 {
@@ -54,6 +53,16 @@ struct client_type_s client_types[] =
 	  EXAVClientInfo
 	},
 
+	/* User-Agent: DLNADOC/1.50 SEC_HHP_[PC]LPC001/1.0  MS-DeviceCaps/1024 */
+	/* This is AllShare running on a PC.  We don't want to respond with Samsung
+	 * capabilities, or Windows (and AllShare) might get grumpy. */
+	{ 0,
+	  FLAG_DLNA,
+	  "AllShare",
+	  "SEC_HHP_[PC]",
+	  EUserAgent
+	},
+
 	/* Samsung Series [CDE] BDPs and TVs must be separated, or some of our
 	 * advertised extra features trigger a folder browsing bug on BDPs. */
 	/* User-Agent: DLNADOC/1.50 SEC_HHP_BD-D5100/1.0 */
@@ -66,9 +75,10 @@ struct client_type_s client_types[] =
 
 	/* User-Agent: DLNADOC/1.50 SEC_HHP_[TV]UE40D7000/1.0 */
 	/* User-Agent: DLNADOC/1.50 SEC_HHP_ Family TV/1.0 */
+	/* USER-AGENT: DLNADOC/1.50 SEC_HHP_[TV] UE65JU7000/1.0 UPnP/1.0 */
 	{ ESamsungSeriesCDE,
-	  FLAG_SAMSUNG | FLAG_DLNA | FLAG_NO_RESIZE | FLAG_SAMSUNG_DCM10,
-	  "Samsung Series [CDEF]",
+	  FLAG_SAMSUNG | FLAG_DLNA | FLAG_NO_RESIZE | FLAG_SAMSUNG_DCM10 | FLAG_CAPTION_RES,
+	  "Samsung Series [CDEFJ]",
 	  "SEC_HHP_",
 	  EUserAgent
 	},
@@ -133,6 +143,14 @@ struct client_type_s client_types[] =
 	  "Sony BDP",
 	  "mv=\"2.0\"",
 	  EXAVClientInfo
+	},
+
+	/* USER-AGENT: Linux/2.6.35 UPnP/1.0 DLNADOC/1.50 INTEL_NMPR/2.0 LGE_DLNA_SDK/1.6.0 */
+	{ ELGNetCastDevice,
+	  FLAG_DLNA | FLAG_CAPTION_RES,
+	  "LG",
+	  "LGE_DLNA_SDK/1.6.0",
+	  EUserAgent
 	},
 
 	/* User-Agent: Linux/2.6.31-1.0 UPnP/1.0 DLNADOC/1.50 INTEL_NMPR/2.0 LGE_DLNA_SDK/1.5.0 */
@@ -222,6 +240,13 @@ struct client_type_s client_types[] =
 	  EUserAgent
 	},
 
+	{ 0,
+	  FLAG_DLNA | FLAG_MIME_AVI_AVI,
+	  "Windows",
+	  "FDSSDP",
+	  EUserAgent
+	},
+
 	{ EStandardDLNA150,
 	  FLAG_DLNA | FLAG_MIME_AVI_AVI,
 	  "Generic DLNA 1.5",
@@ -251,7 +276,7 @@ SearchClientCache(struct in_addr addr, int quiet)
 		if (clients[i].addr.s_addr == addr.s_addr)
 		{
 			/* Invalidate this client cache if it's older than 1 hour */
-			if ((uptime() - clients[i].age) > 3600)
+			if ((time(NULL) - clients[i].age) > 3600)
 			{
 				unsigned char mac[6];
 				if (get_remote_mac(addr, mac) == 0 &&
@@ -259,7 +284,7 @@ SearchClientCache(struct in_addr addr, int quiet)
 				{
 					/* Same MAC as last time when we were able to identify the client,
 					 * so extend the timeout by another hour. */
-					clients[i].age = uptime();
+					clients[i].age = time(NULL);
 				}
 				else
 				{
@@ -289,7 +314,7 @@ AddClientCache(struct in_addr addr, int type)
 		get_remote_mac(addr, clients[i].mac);
 		clients[i].addr = addr;
 		clients[i].type = &client_types[type];
-		clients[i].age = uptime();
+		clients[i].age = time(NULL);
 		DPRINTF(E_DEBUG, L_HTTP, "Added client [%s/%s/%02X:%02X:%02X:%02X:%02X:%02X] to cache slot %d.\n",
 					client_types[type].name, inet_ntoa(clients[i].addr),
 					clients[i].mac[0], clients[i].mac[1], clients[i].mac[2],

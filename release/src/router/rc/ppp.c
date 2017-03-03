@@ -33,10 +33,6 @@
 #include <shutils.h>
 #include <rc.h>
 
-#ifdef RTCONFIG_USB_MODEM
-#include <usb_info.h>
-#endif
-
 /*
 * parse ifname to retrieve unit #
 */
@@ -86,6 +82,17 @@ ipup_main(int argc, char **argv)
 
 	_dprintf("%s: unit=%d ifname=%s\n", __FUNCTION__, unit, wan_ifname);
 	snprintf(prefix, sizeof(prefix), "wan%d_", unit);
+
+#ifdef DEBUG_RCTEST // Left for UI debug
+	int max_count = nvram_get_int("ppp_delay_sec");
+	int count;
+	if(max_count > 0){
+		for(count = 1; count <= max_count; ++count){
+			_dprintf("%s: unit=%d ifname=%s sleep %d seconds...\n", __FUNCTION__, unit, wan_ifname, count);
+			sleep(1);
+		}
+	}
+#endif
 
 	/* Stop triggering demand connection */
 	if (nvram_get_int(strcat_r(prefix, "pppoe_demand", tmp)))
@@ -166,7 +173,7 @@ ipdown_main(int argc, char **argv)
 	wan_down(wan_ifname);
 
 	// override wan_state to get real reason
-	update_wan_state(prefix, WAN_STATE_STOPPED, pppstatus());
+	update_wan_state(prefix, WAN_STATE_STOPPED, pppstatus(unit));
 
 	unlink(strcat_r("/tmp/ppp/link.", wan_ifname, tmp));
 

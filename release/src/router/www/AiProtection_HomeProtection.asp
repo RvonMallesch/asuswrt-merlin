@@ -87,6 +87,8 @@
 }
 </style>
 <script>
+//if(usb_support) addNewScript("/disk_functions.js");
+
 window.onresize = function() {
 	if(document.getElementById("weakness_div").style.display == "block") {
 		cal_panel_block("weakness_div", 0.25);
@@ -328,7 +330,7 @@ function enable_whole_security(){
 }
 function check_login_name_password(){
 
-	if('<% check_acorpw(); %>' == '1'){
+	if(<% check_acorpw(); %> == 1){
 		document.getElementById('login_password').innerHTML = "<a href='Advanced_System_Content.asp' target='_blank'><#checkbox_No#></a>";
 		document.getElementById('login_password').className = "status_no";	
 		document.getElementById('login_password').onmouseover = function(){overHint(10);}
@@ -341,7 +343,7 @@ function check_login_name_password(){
 }
 
 function check_wireless_password(){
-	var nScore = '<% check_passwd_strength("wl_key"); %>';
+	var nScore = <% check_passwd_strength("wl_key"); %>;
 	var oScore = document.getElementById("score");
 	if (nScore >= 0 && nScore < 20) { sComplexity = "<#PASS_score0#>"; }
 	else if (nScore >= 20 && nScore < 40) { sComplexity = "<#PASS_score1#>"; }
@@ -364,7 +366,7 @@ function check_wireless_password(){
 }
 
 function check_wireless_encryption(){
-	if('<% check_wireless_encryption(); %>' == '1'){		
+	if(<% check_wireless_encryption(); %> == "1"){		
 		document.getElementById('wireless_encryption').innerHTML = "<#PASS_score3#>";
 		document.getElementById('wireless_encryption').className = "status_yes";
 	}
@@ -973,7 +975,7 @@ function check_smtp_server_type(){
 														<tr>
 															<td>
 																<div style="width:430px"><#AiProtection_HomeDesc2#></div>
-																<div style="width:430px"><a style="text-decoration:underline;" href="http://www.asus.com/us/support/FAQ/1008719/" target="_blank"><#AiProtection_Home#> FAQ</a></div>
+																<div style="width:430px"><a style="text-decoration:underline;" href="http://www.asus.com/support/FAQ/1008719/" target="_blank"><#AiProtection_Home#> FAQ</a></div>
 															</td>
 															<td>
 																<div style="width:100px;height:48px;margin-left:-40px;background-image:url('images/New_ui/tm_logo.png');"></div>
