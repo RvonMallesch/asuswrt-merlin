@@ -1589,6 +1589,7 @@ void init_switch()
 #ifndef RTCONFIG_BCMARM
 	|| nvram_get_int("sw_mode") == SW_MODE_REPEATER
 #endif
+	|| nvram_get_int("cstats_enable") == 1
 //#ifdef RTCONFIG_USB_MODEM
 //	|| nvram_get_int("ctf_disable_modem")
 //#endif
@@ -2672,7 +2673,7 @@ void generate_wl_para(char *ifname, int unit, int subunit)
 	char tmp[100], prefix[]="wlXXXXXXX_";
 	char tmp2[100], prefix2[]="wlXXXXXXX_";
 	char *list;
-	char *nv, *nvp, *b;
+	char *nv, *nvp, *b, *c;
 	char word[256], *next;
 #ifndef RTCONFIG_BCMWL6
 	int match;
@@ -2707,7 +2708,7 @@ void generate_wl_para(char *ifname, int unit, int subunit)
 #endif
 
 		if (nvram_match("wps_enable", "1") &&
-			((unit == nvram_get_int("wps_band") || nvram_match("w_Setting", "0"))))
+			((unit == nvram_get_int("wps_band_x") || nvram_match("w_Setting", "0"))))
 			nvram_set(strcat_r(prefix, "wps_mode", tmp), "enabled");
 		else
 			nvram_set(strcat_r(prefix, "wps_mode", tmp), "disabled");
@@ -3278,11 +3279,11 @@ void generate_wl_para(char *ifname, int unit, int subunit)
 			nvram_set(strcat_r(prefix, "bss_opmode_cap_reqd", tmp), "2");	// devices must advertise HT (11n) capabilities to be allowed to associate
 		}
 #endif
-
+#if 0
 		if (nvram_match(strcat_r(prefix, "nband", tmp), "2") &&
 			nvram_match(strcat_r(prefix, "nmode", tmp2), "-1"))
 			nvram_set(strcat_r(prefix, "gmode_protection", tmp), "auto");
-
+#endif
 #ifdef RTCONFIG_BCMWL6
 		if (nvram_match(strcat_r(prefix, "bw", tmp), "0"))			// Auto
 		{
@@ -3483,7 +3484,6 @@ void generate_wl_para(char *ifname, int unit, int subunit)
 			nvram_set(strcat_r(prefix, "wme_bss_disable", tmp), nvram_safe_get(strcat_r(prefix2, "wme_bss_disable", tmp2)));
 			nvram_set(strcat_r(prefix, "wpa_gtk_rekey", tmp), nvram_safe_get(strcat_r(prefix2, "wpa_gtk_rekey", tmp2)));
 			nvram_set(strcat_r(prefix, "wmf_bss_enable", tmp), nvram_safe_get(strcat_r(prefix2, "wmf_bss_enable", tmp2)));
-
 			if (!nvram_match(strcat_r(prefix, "macmode", tmp), "disabled") &&
 				nvram_match(strcat_r(prefix, "mode", tmp2), "ap")) {
 				nv = nvp = strdup(nvram_safe_get(strcat_r(prefix, "maclist_x", tmp)));
@@ -6064,8 +6064,8 @@ void set_acs_ifnames()
 
 #if defined(RTAC5300) || defined(RTAC5300R)
 	if ((nvram_get_int("wl2_band5grp") & WL_5G_BAND_3) && nvram_match("wl2_country_code", "E0"))
-		/* exclude non-certificated weather radar chanspec 120, 120u, 120/80, 124, 124l, 124/80, 128, 128u, 128/80 */
-		nvram_set("wl2_acs_excl_chans", "0xd078,0xd976,0xe17a,0xd07c,0xd87e,0xe27a,0xd080,0xd97e,0xe37a");
+		/* exclude non-certificated weather radar chanspec 116l, 116/80, 120, 120u, 120/80, 124, 124l, 124/80, 128, 128u, 128/80 */
+		nvram_set("wl2_acs_excl_chans", "0xd876,0xe07a,0xd078,0xd976,0xe17a,0xd07c,0xd87e,0xe27a,0xd080,0xd97e,0xe37a");
 	else
 #endif
 	/* exclude acsd from selecting chanspec 165 */
@@ -6081,8 +6081,8 @@ void set_acs_ifnames()
 			nvram_set("wl1_acs_excl_chans", nvram_match("acs_band3", "1") ? "" : "0xd064,0xd866,0xe06a,0xd068,0xd966,0xe16a,0xd06c,0xd86e,0xe26a,0xd070,0xd96e,0xe36a,0xd074,0xd084,0xd886,0xd088,0xd986,0xd08c");
 		else
 #if defined(RTAC88U) || defined(RTAC3100)
-			/* exclude non-certificated weather radar chanspec 120, 120u, 120/80, 124, 124l, 124/80, 128, 128u, 128/80 */
-			nvram_set("wl1_acs_excl_chans", nvram_match("acs_dfs", "1") ? (nvram_match("wl1_country_code", "E0") ? "0xd078,0xd976,0xe17a,0xd07c,0xd87e,0xe27a,0xd080,0xd97e,0xe37a" : "") : "0xd034,0xe03a,0xd836,0xd038,0xe13a,0xd936,0xd03c,0xe23a,0xd83e,0xd040,0xe33a,0xd93e,0xd064,0xd866,0xe06a,0xd068,0xd966,0xe16a,0xd06c,0xd86e,0xe26a,0xd070,0xd96e,0xe36a,0xd074,0xd078,0xd976,0xe17a,0xd07c,0xd87e,0xe27a,0xd080,0xd97e,0xe37a,0xd084,0xd886,0xd088,0xd986,0xd08c");
+			/* exclude non-certificated weather radar chanspec 116l, 116/80, 120, 120u, 120/80, 124, 124l, 124/80, 128, 128u, 128/80 */
+			nvram_set("wl1_acs_excl_chans", nvram_match("acs_dfs", "1") ? (nvram_match("wl1_country_code", "E0") ? "0xd876,0xe07a,0xd078,0xd976,0xe17a,0xd07c,0xd87e,0xe27a,0xd080,0xd97e,0xe37a" : "") : "0xd034,0xe03a,0xd836,0xd038,0xe13a,0xd936,0xd03c,0xe23a,0xd83e,0xd040,0xe33a,0xd93e,0xd064,0xd866,0xe06a,0xd068,0xd966,0xe16a,0xd06c,0xd86e,0xe26a,0xd070,0xd96e,0xe36a,0xd074,0xd078,0xd976,0xe17a,0xd07c,0xd87e,0xe27a,0xd080,0xd97e,0xe37a,0xd084,0xd886,0xd088,0xd986,0xd08c");
 #else
 			/* exclude acsd from selecting chanspec 52, 52l, 52/80, 56, 56u, 56/80, 60, 60l, 60/80, 64, 64u, 64/80, 100, 100l, 100/80, 104, 104u, 104/80, 108, 108l, 108/80, 112, 112u, 112/80, 116, 132, 132l, 136, 136u, 140 */
 			nvram_set("wl1_acs_excl_chans", nvram_match("acs_dfs", "1") ? "" : "0xd034,0xe03a,0xd836,0xd038,0xe13a,0xd936,0xd03c,0xe23a,0xd83e,0xd040,0xe33a,0xd93e,0xd064,0xd866,0xe06a,0xd068,0xd966,0xe16a,0xd06c,0xd86e,0xe26a,0xd070,0xd96e,0xe36a,0xd074,0xd084,0xd886,0xd088,0xd986,0xd08c");

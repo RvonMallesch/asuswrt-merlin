@@ -5984,33 +5984,7 @@ int init_nvram2(void)
 	nvram_set("vpn_server1_errno", "0");
 	nvram_set("vpn_server2_errno", "0");
 	nvram_set("vpn_upload_state", "");
-
-	if(!nvram_is_empty("vpn_server_clientlist")) {
-		nvram_set("vpn_serverx_clientlist", nvram_safe_get("vpn_server_clientlist"));
-		nvram_unset("vpn_server_clientlist");
-	}
 #endif
-
-/* migrate dhcpc_options to wanxxx_clientid */
-        char *oldclientid = nvram_safe_get("wan0_dhcpc_options");
-	if (*oldclientid) {
-		nvram_set("wan0_clientid", oldclientid);
-		nvram_unset("wan0_dhcpc_options");
-	}
-
-	oldclientid = nvram_safe_get("wan1_dhcpc_options");
-	if (*oldclientid) {
-		nvram_set("wan1_clientid", oldclientid);
-		nvram_unset("wan1_dhcpc_options");
-	}
-
-/* Migrate to Asus's new tri-state sshd_enable to our dual nvram setup */
-	if (nvram_match("sshd_enable", "1")) {
-		if (nvram_match("sshd_wan", "0"))
-			nvram_set("sshd_enable", "2");  // LAN-only
-		// else stay WAN+LAN
-		nvram_unset("sshd_wan");
-	}
 
 	if (restore_defaults_g)
 	{
@@ -6022,9 +5996,9 @@ int init_nvram2(void)
 		sprintf(friendly_name, "%s-%02X%02X", "BRT-AC828", mac_binary[4], mac_binary[5]);
 		nvram_set("computer_name", friendly_name);
 #endif
-	}
 
-	nvram_commit();
+		nvram_commit();
+	}
 
 #ifdef RTCONFIG_WPS_ALLLED_BTN
 	nvram_set_int("AllLED", 1);
@@ -6786,6 +6760,7 @@ Alarm_Led(void) {
 }
 void config_format_compatibility_handler(void)
 {
+	adjust_merlin_config();
 	//adjust_url_urlelist(); /* For based on 382, new config format */
 	adjust_ddns_config();
 }
@@ -7297,68 +7272,4 @@ int reboothalt_main(int argc, char *argv[])
 
 	return 0;
 }
-
-#ifdef WLCLMLOAD
-#include <wlutils.h>
-#include <bcmdevs.h>
-int download_clmblob_files();
-/* clm_blob files will be installed in /brcm/clm/<chipnum><extra_id>.clm */
-/* wl -i <ethx> <blobfilename> will be used to download */
-int download_clmblob_files()
-{
-	int i = 0;
-	char ifname[16] = {0};
-	wlc_rev_info_t revinfo;
-	int err;
-	const char *fmt;
-	char chn[8];
-	int chnlen=8;
-	uint chipid;
-	char blob_fname[60];
-
-	for (i = 1; i <= DEV_NUMIFS; i++) {
-		snprintf(ifname, sizeof(ifname), "eth%d", i);
-		if (!wl_probe(ifname)) {
-			memset(&revinfo, 0, sizeof(revinfo));
-			if ((err = wl_ioctl(ifname, WLC_GET_REVINFO, &revinfo, sizeof(revinfo))) < 0) {
-				printf("\n*** BEFORE-CLMLOAD %s WLC_GET_REVINFO err=%d ", ifname, err);
-			}
-			else {
-				printf("\n*** BEFORE-CLMLOAD %s - chipnum = 0x%x (%d)  ", ifname, revinfo.chipnum, revinfo.chipnum);
-				chipid = revinfo.chipnum;
-
-				/* Use same 4366 blob for 43664 and 4365 */
-				if (chipid == BCM43664_CHIP_ID || chipid == BCM4365_CHIP_ID)
-					chipid = BCM4366_CHIP_ID;
-
-				/* blob filename based on chipid */
-				fmt = ((chipid > 0xa000) || (chipid < 0x4000)) ? "%d" : "%x";
-				snprintf(chn, chnlen, fmt, chipid);
-
-				memset(&(blob_fname[0]), 0, sizeof(blob_fname));
-				if (chipid == BCM4366_CHIP_ID) {
-					sprintf(blob_fname, "%s%s_access.clm_blob", "./brcm/clm/",chn);
-					printf("\n Download %s to %s ......", blob_fname, ifname);
-					eval("wl", "-i", ifname, "clmload", blob_fname);
-				}
-				else if (chipid == BCM43602_CHIP_ID) {
-					sprintf(blob_fname, "%s%sa1_access.clm_blob", "./brcm/clm/",chn);
-					printf("\n Download %s to %s ......", blob_fname, ifname);
-					eval("wl", "-i", ifname, "clmload", blob_fname);
-				}
-				else {
-					sprintf(blob_fname, "%srouter.clm_blob", "./brcm/clm/");
-					printf("\n Download %s to %s ......", blob_fname, ifname);
-					eval("wl", "-i", ifname, "clmload", blob_fname);
-					if (revinfo.phytype == WLC_PHY_TYPE_AC) {
-						printf("\n *** Is PHY_TYPE_AC %d - set vhtmode 1", revinfo.phytype);
-						eval("wl", "-i", ifname, "vhtmode", "1");
-					}
-				}
-			}
-		}
-	} /* for */
-	return (0);
-}
-#endif /* WLCLMLOAD */
 
