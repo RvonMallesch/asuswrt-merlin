@@ -1,18 +1,7 @@
-asuswrt-merlin
-==============
+asuswrt-merlin-modem-support
+============================
 
-This is an enhanced version of Asuswrt - the firmware used by all recent Asus routers. 
+This is an enhanced version of Asuswrt - the firmware used by all recent Asus routers and modem-routers. 
+This is a fork of merlins excellent custom router firmware and adds support for modem routers.
 
-The goal of this project is to fix issues and bring some minor functionality adjustments to the 
-original Asus firmware.  While some features do get added, this is not the main focus of this project.  
-It is not meant to replace existing projects such as Tomato or DD-WRT, but rather to offer an alternative 
-for people who prefer the original firmware featureset.
-
-Please consult the Wiki for an up-to-date list of supported models:
-
-https://github.com/RMerl/asuswrt-merlin/wiki/Supported-Devices
-
-
-Firmware builds can be downloaded from the official download site:
-
-https://asuswrt.lostrealm.ca/download
+So far I have added support for the DSL-AC68U. Adding support for other routers should be straight forward. Unfortunately I only have the DSL-AC68U to test on.
